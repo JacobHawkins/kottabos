@@ -9,7 +9,8 @@ The server remains the authority for movement, hazards and results. Screens show
 ### Local verification completed
 
 - Downloaded official Node **24.21.0** Windows runtime, verified its ZIP against official SHA-256 checksums, and used it for clean `npm ci --include=dev`, production build, syntax checks and the combined automated tests. Existing Node **22.18.0** also ran protocol/browser checks. No Colyseus/Phaser version changed; lockfile retained. Installation reported zero vulnerabilities.
-- Vite production output is approximately 7.5 kB HTML, 14.5 kB CSS, 190 kB initial JS and a separately loaded 1.38 MB Phaser/game chunk (before compression). The large-chunk warning remains; Phaser only downloads after joining. No HMR, simulated-drop control, source maps or `window.__partyDebug` ships in the production path.
+- Final `npm run check` and **all 46 tests in `npm test` passed** on Node 24.21.0, with production tests kept separate so the focused suite does not require `dist/`.
+- Vite production output is approximately 7.6 kB HTML, 14.6 kB CSS, 191 kB initial JS and a separately loaded 1.38 MB Phaser/game chunk (before compression). The large-chunk warning remains; Phaser only downloads after joining. No HMR, simulated-drop control, source maps or `window.__partyDebug` ships in the production path.
 - Original **seven Chrome/Edge browser cases passed**, including whole-browser reopen, identity/score preservation, duplicate-tab protection, explicit leave during retry, stale health response, eliminated recovery, host transfer and server restart. The full-round test now follows visible safe tiles with keyboard events instead of assuming a center island.
 - Focused input/controller tests cover analog dead zone, bounded combined touch/keyboard direction, capture, extra finger, release outside, cancellation/lost capture, blur/pagehide/visibility/rotation, disconnect, elimination and phase/round clearing.
 - **13 deterministic client-session tests** cover provider HTML, bounded readiness, cancellation during health/matchmaking/WebSocket handshake, stale operations, corrupt saved timing metadata, full/missing parties, expired recovery and page close.
@@ -29,6 +30,17 @@ Screenshots/test artifacts are ignored local files, not public repository conten
 ### Still requires people and real devices
 
 The available physical target is **two iPhones using Safari**, possibly Chrome on iPhone. No actual iPhone, app switch, screen lock, Wi-Fi/cellular switch, or friend on another network has yet been verified. Chrome touch emulation is only pointer/layout evidence. Use [the family acceptance sheet](playtest.md). Public-URL automation, if completed below, still runs from this one computer and is not a remote-family playtest. Free-host idle cold-start timing must be observed on the real service; injected loading HTML only tests the app's response.
+
+### Live deployment and public smoke test
+
+- Public game: **https://kottabos.onrender.com**. Public source: **https://github.com/JacobHawkins/kottabos**, branch `main`, created with explicit owner authorization.
+- Deployed application revision: **`b66814ebca7ed1daf83519bd8622fd1e471d6774`**. The initial deploy began September 19, 2026 at 16:16 MDT. Render's build log confirmed Linux Node **24.21.0**, a clean lockfile install with zero reported vulnerabilities, and a successful Vite build. Later documentation-only commits do not change the deployed application; auto-deploys are off.
+- Service configuration was verified in Render: **one Free Node Web Service, Oregon, `main`, auto-deploy Off, PR previews Off**, build `npm ci --include=dev && npm run build`, start `npm run start:prod`, health `/api/health`. Normal 120-second reservation, 3-second countdown, 45-second round and four-room cap are set. No other existing service, billing setting, card, trial, disk, database or external monitoring was changed/created.
+- `npm run test:remote` with `PLAYTEST_URL=https://kottabos.onrender.com` passed **one public Chrome/Edge acceptance case in 39.8 seconds**. It checked HTTPS asset loading, actual **WSS** connections, distinct players/invitation, host stability, three guest refreshes with the same identity, a round, matching preserved scores, results/replay, host leave/transfer and explicit leave. No uncaught browser JavaScript errors or production debug controls were present. Both test players left; browsers closed.
+- Public `/api/health` returned healthy and `reconnectionSeconds: 120`. Settings showed a Live successful deployment. The post-test billing page still showed **no card**, $0 accrued/projected charges and rounded usage counters of zero. Its service count still lagged creation, so those counters are not a measurement of zero resource consumption; check after reporting catches up. The account's no-card suspension behavior is the spending safeguard.
+- All temporary local test/production/development servers were stopped; no listeners remained on the task's 2567/2579/2580/2581/2583 ports. **The intentionally deployed Render service remains active** and is allowed to idle normally. No keep-awake job exists.
+
+Milestones 4A–4E have implementation/automated evidence above. 4F remains pending actual iPhone and human remote-network observations; a public test from this computer does not substitute for it.
 
 ## September 15, 2026 — original local milestones (historical)
 

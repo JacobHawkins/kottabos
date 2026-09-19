@@ -2,6 +2,8 @@
 
 A small browser party game for two to four people. Create a private party, share its code, ready up, and survive a disappearing floor. The same party keeps its scores between rounds.
 
+**Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or try iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. Actual iPhone/family acceptance is still pending; see [the playtest sheet](docs/playtest.md).
+
 Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) is the specification. No TypeScript source or compilation workflow is used.
 
 ## Start locally
@@ -125,7 +127,7 @@ One Node process runs Colyseus and the Vite middleware on the same origin and po
 
 Environment settings are optional: `PORT` (default 2567), `RECONNECT_SECONDS` (120, positive up to 600), `COUNTDOWN_MS` (3000), and `ROUND_DURATION_MS` (45000; positive values below 3000 are clamped to 3000). Configuration is trusted server-side only; a joining player cannot change it. No `.env` file is required or loaded automatically.
 
-Source layout and decisions are in [docs/architecture.md](docs/architecture.md). Contributor instructions are in [AGENTS.md](AGENTS.md). The lockfile and original brief are preserved. The owner authorized public source publication for this phase.
+Source: [JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos), branch `main`, published with the owner's authorization. Layout and decisions are in [docs/architecture.md](docs/architecture.md); contributor instructions are in [AGENTS.md](AGENTS.md). The lockfile and original brief are preserved.
 
 The phase specification is [instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md](instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md); implementation evidence and pending human/device checks are in the verification record.
 

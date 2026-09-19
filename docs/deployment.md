@@ -2,6 +2,8 @@
 
 Implementation/research date: September 19, 2026. One Node process serves the built Phaser client, HTTP endpoints and Colyseus WebSockets. Production remains in memory: sleep, restart, redeploy or suspension loses parties and scores.
 
+Live service: **[kottabos.onrender.com](https://kottabos.onrender.com)**. Source: **[JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos)**, `main`. Initial application revision: `b66814ebca7ed1daf83519bd8622fd1e471d6774`. This service was created through Render's dashboard using the public repository and the settings below; `render.yaml` is the reproducible equivalent, not an attached managed Blueprint. Do not apply it as a second service.
+
 ## Reviewed configuration
 
 Use [render.yaml](../render.yaml) for one **Free** Node Web Service, one instance, manual deploys, `/api/health`, and the provider HTTPS subdomain. Oregon is the proposed western-US region; choose the closest supported region to the group before creation (the region cannot be changed in place). No database, disk, paid compute, preview service, custom domain, trial or keep-awake traffic is required. The repository/branch containing the Blueprint supplies the source; confirm the selected branch in the creation screen.
@@ -15,6 +17,14 @@ npm run start:prod
 Render build: `npm ci --include=dev && npm run build`. Start: `npm run start:prod`. `.node-version` pins **24.21.0**. `PORT` is provided by Render; the process binds `0.0.0.0`. `RENDER_EXTERNAL_URL` supplies the allowed browser origin (or set `PUBLIC_ORIGIN` explicitly). The client uses its page origin; the pinned SDK converts HTTPS to WSS. Render terminates TLS and forwards HTTP/WebSockets to the same service port. See [Render WebSockets](https://render.com/docs/websocket), [web service setup](https://render.com/docs/web-services), [Node selection](https://render.com/docs/node-version), and [Vite's production guidance](https://vite.dev/guide/static-deploy.html).
 
 Normal settings: `NODE_ENV=production`, `MAX_ROOMS=4`, `RECONNECT_SECONDS=120`, `COUNTDOWN_MS=3000`, `ROUND_DURATION_MS=45000`. Do not carry accelerated test timings into deployment. `HOST=127.0.0.1` is an optional local production override. No secrets go in the browser or repository. Test tooling is a build/dev dependency and is never loaded by the production entry.
+
+Run the small authorized public smoke test from PowerShell (creates isolated test players and leaves afterward):
+
+```powershell
+$env:PLAYTEST_URL = 'https://kottabos.onrender.com'
+npm run test:remote
+Remove-Item Env:PLAYTEST_URL
+```
 
 ## The $0 condition
 
