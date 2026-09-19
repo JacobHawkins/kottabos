@@ -2,6 +2,8 @@
 
 Actual iPhone and another person's remote-network tests remain manual acceptance. Desktop Chrome touch emulation is only layout/pointer evidence. iPhone Safari is the primary device target; record an iPhone Chrome run separately if used.
 
+**First human result, September 19, 2026:** the owner played through the hosted service using a computer browser and a real phone, reported no problems, and liked it. Device/browser versions, networks and individual scenarios below were not recorded. Keep this positive smoke test separate from the remaining four-player, cross-network and phone lifecycle checks.
+
 ## Invite and play
 
 Open the deployed HTTPS URL, enter a nickname and create a party. Copy its invitation link and share it yourself. Friends open that link on their phones/computers, enter nicknames and join. Each browser profile/device is a distinct player. Open only one active game tab per profile. Everyone presses Ready; the host presses Start.

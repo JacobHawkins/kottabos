@@ -29,7 +29,9 @@ Screenshots/test artifacts are ignored local files, not public repository conten
 
 ### Still requires people and real devices
 
-The available physical target is **two iPhones using Safari**, possibly Chrome on iPhone. No actual iPhone, app switch, screen lock, Wi-Fi/cellular switch, or friend on another network has yet been verified. Chrome touch emulation is only pointer/layout evidence. Use [the family acceptance sheet](playtest.md). Public-URL automation, if completed below, still runs from this one computer and is not a remote-family playtest. Free-host idle cold-start timing must be observed on the real service; injected loading HTML only tests the app's response.
+The intended physical target is **two iPhones using Safari**, possibly Chrome on iPhone. After deployment, the owner reported playing with a browser on their computer and their real phone, with **no problems**, and said they **liked it**. This is human real-device smoke-test evidence, separate from automation. The phone model, iOS/browser version, network arrangement and individual checklist scenarios were not recorded, so this report does not establish every recovery/rotation case or broad Safari compatibility.
+
+Four players, a friend on another network, phone app switching/screen lock, Wi-Fi/cellular switching and real idle cold-start timing still need specific observations. Use [the family acceptance sheet](playtest.md). Injected loading HTML only tests the app's response; public browser automation runs from one computer and is not a remote-family session.
 
 ### Live deployment and public smoke test
 
@@ -40,7 +42,7 @@ The available physical target is **two iPhones using Safari**, possibly Chrome o
 - Public `/api/health` returned healthy and `reconnectionSeconds: 120`. Settings showed a Live successful deployment. The post-test billing page still showed **no card**, $0 accrued/projected charges and rounded usage counters of zero. Its service count still lagged creation, so those counters are not a measurement of zero resource consumption; check after reporting catches up. The account's no-card suspension behavior is the spending safeguard.
 - All temporary local test/production/development servers were stopped; no listeners remained on the task's 2567/2579/2580/2581/2583 ports. **The intentionally deployed Render service remains active** and is allowed to idle normally. No keep-awake job exists.
 
-Milestones 4A–4E have implementation/automated evidence above. 4F remains pending actual iPhone and human remote-network observations; a public test from this computer does not substitute for it.
+Milestones 4A–4E have implementation/automated evidence above. 4F has an owner-reported successful computer + real-phone session; broader four-player, remote-network and phone lifecycle acceptance remains pending.
 
 ## September 15, 2026 — original local milestones (historical)
 

@@ -2,7 +2,7 @@
 
 A small browser party game for two to four people. Create a private party, share its code, ready up, and survive a disappearing floor. The same party keeps its scores between rounds.
 
-**Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or try iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. Actual iPhone/family acceptance is still pending; see [the playtest sheet](docs/playtest.md).
+**Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
 Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) is the specification. No TypeScript source or compilation workflow is used.
 
@@ -135,4 +135,4 @@ The phase specification is [instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md](inst
 
 This prototype has one minigame, keyboard/touch controls, placeholder art and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery, audio or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
 
-Automation establishes tested behavior; real iPhone Safari, network switching/background suspension, and a friend on another network still require human acceptance. Browser emulation does not verify actual phones. Use [the playtest sheet](docs/playtest.md) and record subjective responsiveness and game balance.
+The first hosted computer + real-phone playtest passed by owner report. Four-player play, network switching/background suspension, and a friend on another network remain pending. Browser emulation and owner-reported experience are recorded separately. Use [the playtest sheet](docs/playtest.md) for broader coverage.
