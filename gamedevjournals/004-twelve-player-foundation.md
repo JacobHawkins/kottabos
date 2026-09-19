@@ -10,6 +10,8 @@ Twelve colors are backed by stable numbers 01–12, derived from the reserved co
 
 Tests use twelve independent SDK sockets to play a complete round from synchronized visible warnings, and two browser applications plus ten SDK sockets to inspect the full roster, character rendering and phone layouts. Those checks exercise actual admission, recovery, movement, scoring, replay and host transfer. They do not substitute for twelve people on real phones or establish capacity for four simultaneous full parties. The existing Free service and four-room process cap remain in place; no hosting upgrade is part of this change.
 
+The first public SDK check exposed a proxy compatibility issue after all twelve joined: Colyseus used HTTP 522 for the rejected thirteenth player, and the hosting proxy replaced its JSON with an HTML error page. The browser's existing capacity preflight already gives a clear full-party explanation, but direct or racing joins also deserve one. The public response boundary now uses HTTP 409 while retaining Colyseus's JSON error. The acceptance test checks the raw response and SDK message both with all twelve connected and with one seat reserved; it does not treat an arbitrary network failure as proof of capacity enforcement.
+
 Future work should start with human play and use it to choose another minigame or visual direction. Keep the twelve-player party, recovery and cumulative-score foundation when replacing or adding gameplay. Do not build a generalized game framework before a second game demonstrates the need.
 
 Commands, results, measured observations and the deployed revision belong in [verification](../docs/verification.md). The family sheet now includes full twelve-person play and recovery at capacity.

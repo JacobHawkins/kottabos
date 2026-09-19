@@ -42,6 +42,15 @@ export function createPublicGuard({ allowedOrigin = '', limits = {} } = {}) {
         const category = path.startsWith('/matchmake/create/') ? 'create'
           : path.startsWith('/matchmake/') || path === '/api/leave' ? 'match'
             : path.startsWith('/api/parties/') ? 'lookup' : null;
+        if (path.startsWith('/matchmake/')) {
+          // Pinned Colyseus uses HTTP 522 for locked/unavailable rooms. Managed
+          // proxies can replace that with a gateway HTML page. Keep its JSON
+          // protocol code/message, but send standard HTTP Conflict instead.
+          const writeHead = response.writeHead;
+          response.writeHead = function (status, ...args) {
+            return writeHead.call(this, status === 522 ? 409 : status, ...args);
+          };
+        }
         if (category && !consume(request.socket.remoteAddress, category)) return reject(response, 429, 'Too many requests. Wait a minute and try again.');
         if (path.startsWith('/matchmake/') && !/^\/matchmake\/(create\/party|joinById\/[A-Z]{6}|reconnect\/[A-Z]{6})$/.test(path)) return reject(response, 404, 'Unknown party request.');
         const dispatch = () => { for (const handler of handlers) handler.call(httpServer, request, response); };

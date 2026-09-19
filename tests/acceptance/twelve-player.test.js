@@ -128,10 +128,20 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     assert.equal(lookup.players, 12);
 
     async function rejectThirteenth() {
+      const response = await fetch(`${endpoint}/matchmake/joinById/${partyCode}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Thirteenth player' }),
+      });
+      assert.equal(response.status, 409, 'a full party returns standard HTTP Conflict through a hosting proxy');
+      assert.match(response.headers.get('content-type'), /application\/json/);
+      const body = await response.json();
+      assert.equal(body.code, 522, 'the Colyseus protocol error is retained in JSON');
+      assert.match(body.error, /locked|full/i);
       await assert.rejects(async () => {
         const unexpected = await client.joinById(partyCode, { name: 'Thirteenth player' });
         connections.add(unexpected);
-      }, /full|locked|maxclients/i, 'a thirteenth identity cannot take a seat');
+      }, error => error.code === 409 && /full|locked|maxclients/i.test(error.message),
+      'a thirteenth identity cannot take a seat and receives a useful SDK error');
     }
     await rejectThirteenth();
     const original = players[11];

@@ -14,7 +14,9 @@ Local verification on Node **24.21.0**:
 
 Screenshot review covered portrait, landscape, desktop and results. It found an overlapping lobby banner in short landscape; the text was shortened, and a browser assertion now checks the banner stays below the bottom row. The final syntax check, production rebuild and twelve-player built-browser case passed again (17.0 seconds), and the updated landscape screenshot visibly shows all twelve unobscured characters. The existing Phaser bundle-size warning remains.
 
-Publication and public twelve-client acceptance will be recorded after the manual deployment.
+The first twelve-player revision **`2eda1f0bd7c34cd3945fe11ffbcc2b25beb33819`** deployed successfully to the existing Free service after a 41.3-second rollout begun at 16:46:58 MDT. All twelve public SDK joins worked, but its first overflow assertion failed because the SDK received HTTP 522 with an unhelpful message; a bounded raw-response probe confirmed an HTML response. Installed Colyseus code uses 522 for locked/unavailable rooms, which conflicts with the managed proxy's gateway error handling. Both temporary parties were cleaned up.
+
+The fix maps matchmaking HTTP 522 to standard 409 while preserving JSON code/message and the existing admission checks. The strengthened acceptance requires raw 409 JSON and a useful SDK rejection before and during a reserved seat. Syntax, all **54 focused tests**, both built-server tests and the strengthened full twelve-client local case passed afterward. The corrected live revision and public acceptance will be recorded below.
 
 Twelve physical players, real iPhone performance at that size and four concurrent full parties are **not** established by these checks. The first successful human computer/phone report below predates this update. No dependencies, hosting tier, extra service or automatic deploy setting were changed. The original brief and prior verification sections remain historical records.
 
