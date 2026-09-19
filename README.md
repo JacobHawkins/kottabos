@@ -107,6 +107,7 @@ npm run test:expiry
 - `test` runs focused rules, input, recovery and real local HTTP/WebSocket session tests, including 100/250 ms added socket RTT. These do not require the development server.
 - `test:production` verifies the built server and browser flows (build first); `test:expiry` separately spends the full ordinary 120-second reservation wait.
 - `test:twelve` runs twelve independent SDK players through capacity, recovery, simultaneous movement, a full round and replay on its own local server (port 2584). Setting `PLAYTEST_URL` explicitly targets an authorized HTTPS deployment instead; it creates one temporary party and leaves afterward.
+- `test:remote` requires an authorized HTTPS `PLAYTEST_URL` and checks the basic Chrome/Edge loop plus the twelve-player browser layout/recovery case. It uses temporary isolated test players.
 - `test:browser` launches installed **Chrome and Edge** in headless mode, starts its own server on port **2579**, and uses a separate port **2580** for restart testing. It does not control your everyday browser profiles. Keep those ports free. Playwright is included; no global tooling or interactive login is needed. Browser overrides `TEST_HOST_BROWSER` and `TEST_GUEST_BROWSER` are available, but record any change from two different browsers.
 
 Browser tests accelerate countdowns and reservation expiry. Normal gameplay defaults stay unchanged. See [docs/verification.md](docs/verification.md) for the recorded results and what remains unverified.

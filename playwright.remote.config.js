@@ -5,7 +5,7 @@ if (!baseURL?.startsWith('https://')) throw new Error('Set PLAYTEST_URL to the a
 export default defineConfig({
   testDir: './tests/browser',
   testMatch: ['production.spec.js', 'twelve-player.spec.js'],
-  grep: /Chrome\/Edge invitation/,
+  grep: /Chrome\/Edge invitation|twelve-player party/,
   timeout: 150_000,
   expect: { timeout: 30_000 },
   workers: 1,

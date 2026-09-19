@@ -102,6 +102,10 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
 
     async function track(room) {
       connections.add(room);
+      // Recovery is exercised explicitly below. Match the browser's explicit-
+      // leave behavior: a proxy may report an abnormal socket close even after
+      // the server accepted leave; that must not start automatic SDK retries.
+      room.reconnection.enabled = false;
       const player = { room, id: '', seq: 0 };
       room.onMessage('welcome', ({ playerId }) => { player.id = playerId; });
       room.onMessage('notice', () => {});
