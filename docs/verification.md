@@ -13,7 +13,9 @@ Local checks on Node **24.21.0** passed:
 
 Four players remains the implemented room cap. Eight is a proposed next implementation/test target, not measured capacity. More players require additional distinct spawns/colors and a lobby/roster layout suited to phones; the existing separate four-room pilot cap is also not a hosting benchmark. The earlier human phone report below predates this finale update.
 
-Publication and live acceptance will be recorded after the manual deployment completes.
+Application revision **`4dc847297877278ef01df415c2111c23be7c25fe`** was published to public `main` and manually deployed to the existing Free service at **https://kottabos.onrender.com**. Render reported **Deploy succeeded | Live** after a 41.2-second rollout begun September 19, 2026 at 16:31:53 MDT. Logs confirmed that exact revision, Node **24.21.0**, a successful clean lockfile install/build and production startup. Auto-deploy remains Off; no new resources or hosting settings were changed.
+
+`PLAYTEST_URL=https://kottabos.onrender.com npm run test:remote` passed the public Chrome/Edge acceptance case in **35.3 seconds**: HTTPS/WSS, distinct invitation join, stable host, three guest refresh recoveries, matching round results/scores, replay and explicit leave. That public smoke case is not a claim that players survived to the final pair; the state-by-state rule checks and full-round local browser case verify the ending. Test players left and temporary browsers closed. No local test-server listeners remained. This documentation follow-up does not require another deployment.
 
 ## September 19, 2026 — web and phone phase
 
