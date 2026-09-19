@@ -8,7 +8,7 @@ Actual iPhone and another person's remote-network tests remain manual acceptance
 
 Open the deployed HTTPS URL, enter a nickname and create a party. Copy its invitation link and share it yourself. Friends open that link on their phones/computers, enter nicknames and join. Each browser profile/device is a distinct player. Open only one active game tab per profile. Everyone presses Ready; the host presses Start.
 
-Use WASD/arrows on a computer. On a phone, drag the thumb control and release to stop. Use the Touch controls toggle if detection is wrong. Portrait and landscape are supported without fullscreen. Keep track of amber warning tiles: they disappear after 1.8 seconds. The final island varies among nine central locations. Players may still share an island and tie. The host chooses Play again; scores carry forward.
+Use WASD/arrows on a computer. On a phone, drag the thumb control and release to stop. Use the Touch controls toggle if detection is wrong. Portrait and landscape are supported without fullscreen. Keep track of amber warning tiles: they disappear after 1.8 seconds. Near the end, two adjacent squares remain safe for 2.5 seconds. One is randomly chosen to warn and fall; cross onto the other before it disappears. The pair's location/orientation and earlier waves vary each round. Players may still share the last square and tie. The host chooses Play again; scores carry forward.
 
 The server settles positions, falls, winners and scores. Your own player is predicted locally; other players are interpolated with 100 ms display delay in addition to network travel. Slight screen differences do not create multiple game outcomes. Test feel on the actual route before judging fairness solely from one screen.
 

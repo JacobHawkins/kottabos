@@ -1,5 +1,20 @@
 # Verification record
 
+## September 19, 2026 — two-square finale update
+
+The owner requested two final squares with a random last removal. A round now shrinks toward one of twelve adjacent pairs in the central 3×3 area. For a normal 45-second round, both are safe from 38.2 to 40.7 seconds, one warns for the full 1.8 seconds, and it disappears at 42.5 seconds. The final choice uses a separate seeded stream from the earlier collapse pattern. Early elimination can still finish a round before these stages.
+
+Local checks on Node **24.21.0** passed:
+
+- `npm run check`, `npm run build`, and **all 51 tests in `npm test`**. The build retains the existing Phaser chunk-size warning.
+- The **16 rule tests** include state-by-state 45/20-second finales, all twelve pair locations and both possible survivors across 200 seeds, connected/reachable floor, crossing to the survivor, simultaneous falls, once-only scores, and a three-second test-round fallback that keeps both final tiles safe instead of shortening their warning.
+- **Two built-server protocol/protection tests**, the original full-round Chrome/Edge browser case (24.9 seconds), and the built-app Chrome/Edge invitation/host/recovery/results/replay case (10.1 seconds).
+- The focused suite also reran actual game WebSocket delay/recovery checks at 100/250 ms added RTT. No dependency, client rendering, player limit, recovery protocol or hosting configuration changed.
+
+Four players remains the implemented room cap. Eight is a proposed next implementation/test target, not measured capacity. More players require additional distinct spawns/colors and a lobby/roster layout suited to phones; the existing separate four-room pilot cap is also not a hosting benchmark. The earlier human phone report below predates this finale update.
+
+Publication and live acceptance will be recorded after the manual deployment completes.
+
 ## September 19, 2026 — web and phone phase
 
 The owner reported successful local playtests, a perceived host transfer on later joins, visible movement delay between screens, and predictable center-island endings. Four-player protocol tests did not reproduce joins stealing host: the existing rule keeps a connected creator and transfers on refresh/drop/leave without taking controls back on rejoin. The UI now names the host and explains this rule. Final islands now vary across nine central tiles; 200-seed rule checks prove variety, connected remaining floor, and reachable escape within the warning interval.

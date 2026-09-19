@@ -36,15 +36,22 @@ export function createTileSchedule(seed, durationMs = ROUND_DURATION_MS) {
   const random = seededRandom(seed);
   const centerColumn = Math.floor(ARENA.columns / 2);
   const centerRow = Math.floor(ARENA.rows / 2);
-  // Nine equally likely destinations give every spawn the same distribution
-  // of travel distances. Keeping the island away from the edge leaves room to
-  // approach it from every direction; its location stays server-private.
-  const islandColumn = centerColumn - 1 + Math.floor(random() * 3);
-  const islandRow = centerRow - 1 + Math.floor(random() * 3);
+  // Choose one of the twelve adjacent pairs in the central 3x3 area. Both
+  // orientations and all corners are symmetric with respect to player spawns.
+  const pairs = [];
+  for (let row = centerRow - 1; row <= centerRow + 1; row++) {
+    for (let column = centerColumn - 1; column <= centerColumn + 1; column++) {
+      const tile = row * ARENA.columns + column;
+      if (column < centerColumn + 1) pairs.push([tile, tile + 1]);
+      if (row < centerRow + 1) pairs.push([tile, tile + ARENA.columns]);
+    }
+  }
+  const pair = pairs[Math.floor(random() * pairs.length)];
   const rings = new Map();
   for (let row = 0; row < ARENA.rows; row += 1) {
     for (let column = 0; column < ARENA.columns; column += 1) {
-      const distance = Math.abs(column - islandColumn) + Math.abs(row - islandRow);
+      const distance = Math.min(...pair.map(tile => Math.abs(column - tile % ARENA.columns) +
+        Math.abs(row - Math.floor(tile / ARENA.columns))));
       if (distance === 0) continue;
       if (!rings.has(distance)) rings.set(distance, []);
       rings.get(distance).push(row * ARENA.columns + column);
@@ -58,9 +65,14 @@ export function createTileSchedule(seed, durationMs = ROUND_DURATION_MS) {
     order.push(...shuffled(rings.get(distance), random));
   }
 
-  const waveSizes = [3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5];
+  // Remove 47 tiles first; the pair stays intact throughout the shrink pattern.
+  const waveSizes = [3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 4];
   const firstWarningAt = Math.min(4_000, Math.max(200, durationMs - TILE_WARNING_MS - 1_000));
-  const lastWarningAt = Math.max(firstWarningAt, durationMs - TILE_WARNING_MS - 2_500);
+  const pairHoldMs = 2_500;
+  const finalIslandHoldMs = 2_500;
+  const finalWarningAt = Math.max(firstWarningAt + TILE_WARNING_MS + pairHoldMs,
+    durationMs - TILE_WARNING_MS - finalIslandHoldMs);
+  const lastWarningAt = finalWarningAt - pairHoldMs - TILE_WARNING_MS;
   const schedule = [];
   let cursor = 0;
   for (let wave = 0; wave < waveSizes.length; wave += 1) {
@@ -70,6 +82,15 @@ export function createTileSchedule(seed, durationMs = ROUND_DURATION_MS) {
     for (let offset = 0; offset < waveSizes[wave]; offset += 1) {
       schedule.push({ tile: order[cursor++], warningAt, goneAt: warningAt + TILE_WARNING_MS });
     }
+  }
+  // A separate random stream makes the last choice independent of the pair's
+  // collapse ordering. Nothing about the earlier pattern favors either tile.
+  // Very short test rounds can reach their deadline before this finale; keep
+  // both tiles safe then rather than cutting the warning or hiding the choice.
+  if (finalWarningAt + TILE_WARNING_MS < durationMs) {
+    const finalRandom = seededRandom(`${seed}:final-choice`);
+    schedule.push({ tile: pair[Math.floor(finalRandom() * pair.length)],
+      warningAt: finalWarningAt, goneAt: finalWarningAt + TILE_WARNING_MS });
   }
   return schedule;
 }

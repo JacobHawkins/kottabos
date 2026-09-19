@@ -41,7 +41,7 @@ Always use the same origin, `http://127.0.0.1:2567`, for recovery. `localhost`, 
 7. A lone survivor gets **3 points**. Simultaneous final falls or multiple survivors at the deadline tie for **1 point each**; earlier eliminated players and spectators get none. A round lasts up to **45 seconds**, and can end earlier.
 8. Both browsers receive the same result and cumulative score. The host clicks **Play again** to return everyone to the lobby. Ready up again to start another round.
 
-The last safe tile varies among nine central locations. The shrinking floor stays connected, with warnings before each removal. Players can share the final island for a tie; there is no pushing or jumping.
+The floor shrinks toward a randomly placed pair of adjacent central squares. Both stay safe for 2.5 seconds, then the server randomly chooses one to warn for 1.8 seconds and remove. The last square stays safe to the deadline. Earlier waves do not reveal which of the pair survives. Players can still share the final island for a tie; there is no pushing or jumping.
 
 On phones, use the thumb joystick: drag to move, release to stop. The **Touch controls** toggle also works on hybrid devices. Rotation, canceled gestures, loss of focus and reconnection clear input. Normal scrolling and zoom remain available outside the control. Use the hosted **HTTPS** invitation: plain HTTP on a LAN address does not supply the secure browser features used to guard duplicate tabs.
 
