@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101e29" />
+    <link rel="stylesheet" href="/client/ui.css" />
+    <meta name="description" content="A little friendly chaos. A disappearing floor. Stay on the Platform with two to four friends on phones or computers." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%239febc6'/%3E%3Cpath d='M18 14v36m28-36L20 32l28 18' stroke='%23101e29' stroke-width='8' fill='none'/%3E%3C/svg%3E" />
+    <title>Kottabos · A little friendly chaos</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <a class="wordmark" href="/" aria-label="Kottabos home"><span class="brand-mark">k</span> kottabos<span class="edition">YOUR PEOPLE / ONE FLOOR</span></a>
+        <span id="connection-status" class="status" role="status">Getting ready…</span>
+      </header>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="tab-blocked" class="panel blocked" hidden>
+        <span class="eyebrow">ONE PLAYER PER BROWSER</span>
+        <h1 id="tab-blocked-title">You’re already here.</h1>
+        <p id="tab-blocked-message">Another tab in this browser is using Kottabos. Continue there, or close it and try again here. Use a different browser for another player.</p>
+        <button id="retry-tab" class="primary">Try this tab again</button>
+      </section>
+      <main id="home" hidden>
+        <section class="welcome">
+          <div class="eyebrow"><span class="tiny-square"></span> TWO TO FOUR FRIENDS. ONE FLOOR.</div>
+          <h1>A little<br />friendly <em>chaos.</em></h1>
+          <p class="lede">Bring your people. Find your footing.<br />Try to be the last one standing.</p>
+          <div class="home-tags"><span>NO ACCOUNTS</span><span>TOUCH OR KEYS</span><span>QUICK ROUNDS</span></div>
+          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Ready up.</strong> The party starter kicks things off.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> The floor has other plans.</p></div>
+        </section>
+        <section class="panel join-panel">
+          <div class="tile-emblem" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="warning-tile"></i><i></i><i></i><i></i><i class="missing-tile"></i><b>●</b></div>
+          <span class="eyebrow">YOUR PARTY STARTS HERE</span>
+          <h2>Grab a spot.</h2>
+          <form id="join-form">
+            <label for="nickname">Your nickname</label>
+            <input id="nickname" maxlength="18" autocomplete="nickname" placeholder="What should we call you?" required />
+            <button id="create-party" type="button" class="primary full">Create a party <span aria-hidden="true">↗</span></button>
+            <div class="divider"><span>or join your friends</span></div>
+            <label for="room-code">Party code</label>
+            <div class="join-row"><input id="room-code" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCDEF" /><button id="join-party" type="submit" class="secondary">Join party</button></div>
+          </form>
+          <p class="fine-print">Refresh happens. Your spot is held for two minutes if your connection drops.</p>
+          <button id="cancel-recovery" class="secondary full" style="margin-top:16px" hidden>Cancel rejoining</button>
+        </section>
+      </main>
+      <main id="party" hidden>
+        <aside class="party-sidebar">
+          <section class="panel party-info">
+            <div class="eyebrow">THE GANG’S ALL HERE</div>
+            <div class="code-row"><h2 id="party-code">------</h2><button id="copy-invite" class="icon-button" aria-label="Copy invitation link" title="Copy invitation link">↗</button></div>
+            <p id="host-label" class="muted"></p>
+            <p id="invitation-feedback" class="muted">Share this code or copy your party link.</p>
+            <label class="sr-only" for="invite-link">Invitation link</label><input id="invite-link" readonly aria-label="Invitation link" />
+            <div class="roster-heading"><span>PLAYERS</span><span id="player-count">0 / 4</span></div>
+            <ul id="players-list" class="players-list"></ul>
+            <div class="party-actions">
+              <button id="ready-button" class="primary full">Ready up</button>
+              <button id="start-button" class="secondary full" hidden>Start round</button>
+              <button id="replay-button" class="primary full" hidden>Play again</button>
+              <p id="lobby-hint" class="fine-print"></p>
+            </div>
+            <p class="fine-print host-note">Refresh or disconnect passes host controls to another connected player.</p>
+          </section>
+          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>Move off flashing amber tiles before they fall. Survive together, or outlast everyone.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Tied survivors: +1 point each</p></section>
+          <button id="leave-button" class="text-button">Leave party ↗</button>
+        </aside>
+        <section class="arena-column">
+          <div class="arena-heading"><div><div id="round-label" class="eyebrow">STAY ON THE PLATFORM</div><h1 id="phase-label">Lobby</h1></div><div class="round-clock"><span id="timer-value">—</span><span id="timer-label">UNTIL THE CHAOS</span></div></div>
+          <div class="play-area">
+            <div class="stage"><div id="game-container" role="img" aria-label="Game arena: move with the touch joystick, W A S D, or arrow keys" tabindex="0"></div><div id="stage-banner" class="stage-banner"><span>Waiting for the gang</span></div></div>
+            <div class="touch-options">
+              <button id="touch-toggle" class="text-button" aria-pressed="false" aria-controls="touch-controls">Touch controls: off</button>
+              <div id="touch-controls" hidden>
+                <div id="joystick" role="group" tabindex="0" aria-label="Movement joystick" aria-describedby="touch-hint" aria-disabled="true"><span class="joystick-cross" aria-hidden="true"></span><span class="joystick-thumb" aria-hidden="true"></span></div>
+                <p id="touch-hint" class="fine-print">Drag to move. Release to stop.</p>
+              </div>
+            </div>
+          </div>
+          <div class="arena-footer"><span><i class="legend safe"></i> SAFE</span><span><i class="legend warning"></i> GET MOVING</span><span><i class="legend gone"></i> TOO LATE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
+          <section id="results-panel" class="panel results-panel" hidden><span class="eyebrow">ROUND COMPLETE</span><h2 id="result-text"></h2><p id="results-detail"></p></section>
+        </section>
+      </main>
+      <footer class="site-footer"><span>SMALL GAME. GOOD COMPANY.</span><span>Made for a little friendly competition.</span></footer>
+    </div>
+    <script type="module" src="/client/main.js"></script>
+  </body>
+</html>

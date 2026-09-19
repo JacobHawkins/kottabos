@@ -1,0 +1,24 @@
+# Verify the $0 workspace condition in docs/deployment.md BEFORE applying.
+# Uses the authorized repository/branch containing this file.
+services:
+  - type: web
+    name: kottabos
+    runtime: node
+    plan: free
+    numInstances: 1
+    region: oregon
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MAX_ROOMS
+        value: "4"
+      - key: RECONNECT_SECONDS
+        value: "120"
+      - key: COUNTDOWN_MS
+        value: "3000"
+      - key: ROUND_DURATION_MS
+        value: "45000"
