@@ -2,6 +2,8 @@
 
 Read PARTY_GAME_PROJECT_BRIEF.md as the product specification. Preserve it.
 
+The owner expanded the original scope to **2–12 players** after the first hosted playtest. Treat twelve as the shared party maximum for the current game and future minigames; preserve identity, recovery, readiness and scores when adding or replacing a minigame. The original four-player brief remains a historical starting specification.
+
 - Project source and configuration use plain JavaScript ES modules. Do not add TypeScript or a TypeScript compilation workflow.
 - Keep browser rendering in client/, party/session management in server/, game rules in server/minigames/, and dependency-free movement in shared/.
 - The server decides movement limits, floor hazards, elimination, winners, and scores. Clients send bounded inputs and predict presentation only.

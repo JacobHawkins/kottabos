@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#101e29" />
     <link rel="stylesheet" href="/client/ui.css" />
-    <meta name="description" content="A little friendly chaos. A disappearing floor. Stay on the Platform with two to four friends on phones or computers." />
+    <meta name="description" content="A little friendly chaos. A disappearing floor. Stay on the Platform with 2–12 players on phones or computers." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%239febc6'/%3E%3Cpath d='M18 14v36m28-36L20 32l28 18' stroke='%23101e29' stroke-width='8' fill='none'/%3E%3C/svg%3E" />
     <title>Kottabos · A little friendly chaos</title>
   </head>
@@ -24,7 +24,7 @@
       </section>
       <main id="home" hidden>
         <section class="welcome">
-          <div class="eyebrow"><span class="tiny-square"></span> TWO TO FOUR FRIENDS. ONE FLOOR.</div>
+          <div class="eyebrow"><span class="tiny-square"></span> 2–12 PLAYERS. ONE FLOOR.</div>
           <h1>A little<br />friendly <em>chaos.</em></h1>
           <p class="lede">Bring your people. Find your footing.<br />Try to be the last one standing.</p>
           <div class="home-tags"><span>NO ACCOUNTS</span><span>TOUCH OR KEYS</span><span>QUICK ROUNDS</span></div>
@@ -54,17 +54,17 @@
             <p id="host-label" class="muted"></p>
             <p id="invitation-feedback" class="muted">Share this code or copy your party link.</p>
             <label class="sr-only" for="invite-link">Invitation link</label><input id="invite-link" readonly aria-label="Invitation link" />
-            <div class="roster-heading"><span>PLAYERS</span><span id="player-count">0 / 4</span></div>
-            <ul id="players-list" class="players-list"></ul>
             <div class="party-actions">
               <button id="ready-button" class="primary full">Ready up</button>
               <button id="start-button" class="secondary full" hidden>Start round</button>
               <button id="replay-button" class="primary full" hidden>Play again</button>
               <p id="lobby-hint" class="fine-print"></p>
             </div>
+            <div class="roster-heading"><span>PLAYERS</span><span id="player-count"></span></div>
+            <ul id="players-list" class="players-list"></ul>
             <p class="fine-print host-note">Refresh or disconnect passes host controls to another connected player.</p>
           </section>
-          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>Move off flashing amber tiles before they fall. Survive together, or outlast everyone.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Tied survivors: +1 point each</p></section>
+          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>Move off flashing amber tiles before they fall. Survive together, or outlast everyone. Match your numbered character to the roster; yours has a white ring.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Tied survivors: +1 point each</p></section>
           <button id="leave-button" class="text-button">Leave party ↗</button>
         </aside>
         <section class="arena-column">

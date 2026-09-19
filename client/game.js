@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, TILE_WARNING, TILE_GONE } from '../shared/constants.js';
+import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE } from '../shared/constants.js';
 
 const PADDING = 50;
 const SIZE = ARENA.width + PADDING * 2;
@@ -86,35 +86,36 @@ export function createGame(session, controls) {
       for (const [id, character] of this.characters) {
         if (!state.players[id]) { character.container.destroy(); this.characters.delete(id); }
       }
-      players.forEach((player, index) => {
+      players.forEach((player) => {
         let character = this.characters.get(player.id);
         const local = player.id === session.playerId;
+        const seat = Math.max(0, PLAYER_COLORS.indexOf(player.color));
+        const number = String(seat + 1).padStart(2, '0');
         if (!character) {
           const shadow = this.add.ellipse(0, 11, 31, 12, 0x112e31, .35);
           const body = this.add.graphics();
           body.fillStyle(toColor(player.color));
           body.fillRoundedRect(-14, -19, 28, 31, { tl: 11, tr: 11, bl: 7, br: 7 });
-          body.fillStyle(0x102936);
-          body.fillCircle(-5, -5, 2.5);
-          body.fillCircle(5, -5, 2.5);
-          body.lineStyle(1.5, 0x102936, .6);
-          body.lineBetween(-3, 2, 3, 2);
+          const badge = this.add.text(0, -4, number, { fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#102936' }).setOrigin(.5);
           const ring = this.add.ellipse(0, 10, 36, 14).setStrokeStyle(2, 0xecffe9, .9);
-          const label = this.add.text(0, -32, '', { fontFamily: 'monospace', fontSize: '9px', color: '#fffce8', backgroundColor: '#102331', padding: { x: 5, y: 3 } }).setOrigin(.5);
-          const container = this.add.container(0, 0, [shadow, ring, body, label]);
+          const label = this.add.text(0, -34, '', { fontFamily: 'monospace', fontSize: '11px', color: '#fffce8', backgroundColor: '#102331', padding: { x: 5, y: 3 } }).setOrigin(.5);
+          const container = this.add.container(0, 0, [shadow, ring, body, badge, label]);
           character = { container, label, ring };
           this.characters.set(player.id, character);
         }
-        character.label.setText(`${player.name}${local ? ' · YOU' : ''}`);
-        character.ring.setVisible(local);
         const lobby = state.phase === 'lobby';
+        const shortName = [...player.name].length > 12 ? [...player.name].slice(0, 11).join('') + '…' : player.name;
+        character.label.setText(local ? `${number} · YOU` : shortName);
+        // Numbers remain visible without twelve overlapping name plates during play.
+        character.label.setVisible(lobby || local);
+        character.ring.setVisible(local);
         const visible = lobby || player.participating;
         character.container.setVisible(visible);
         if (!visible) return;
-        const position = lobby ? { x: 128 + index % 2 * 192, y: 160 + Math.floor(index / 2) * 128 }
+        const position = lobby ? { x: 64 + seat % 4 * (ARENA.width - 128) / 3, y: 104 + Math.floor(seat / 4) * 120 }
           : local ? (controls.position() || player) : this.remotePosition(player, performance.now());
         character.container.setPosition(PADDING + position.x, PADDING + position.y);
-        character.container.setDepth(position.y + 10);
+        character.container.setDepth((local ? ARENA.height : 0) + position.y + 10);
         character.container.setAlpha(!lobby && !player.alive ? .22 : player.connected ? 1 : .5);
         character.container.setScale(!lobby && !player.alive ? .7 : 1);
       });

@@ -4,7 +4,7 @@ const baseURL = process.env.PLAYTEST_URL;
 if (!baseURL?.startsWith('https://')) throw new Error('Set PLAYTEST_URL to the authorized HTTPS playtest origin.');
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: 'production.spec.js',
+  testMatch: ['production.spec.js', 'twelve-player.spec.js'],
   grep: /Chrome\/Edge invitation/,
   timeout: 150_000,
   expect: { timeout: 30_000 },

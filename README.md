@@ -1,10 +1,10 @@
 # Kottabos
 
-A small browser party game for two to four people. Create a private party, share its code, ready up, and survive a disappearing floor. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, ready up, and survive a disappearing floor. The same party keeps its scores between rounds.
 
 **Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
-Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) is the specification. No TypeScript source or compilation workflow is used.
+Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) preserves the initial specification; the owner subsequently expanded the shared party maximum to 12. Future minigames should reuse this party, recovery and score foundation. No TypeScript source or compilation workflow is used.
 
 ## Start locally
 
@@ -73,7 +73,7 @@ One Free Render service is configured in [render.yaml](render.yaml). Read [deplo
 | Return after the reservation expires | Explains that the seat or party is unavailable and lets you join by code as a new player, if there is room, or create a new party. |
 | Stop and restart `npm start` | Existing in-memory parties and scores are gone. Clients explain that the previous session ended and offer a new party. |
 
-Unexpected disconnects reserve seats for **two minutes**, counted from server-side detection. Reserved players count toward the four-player limit. Nicknames and room codes are not recovery credentials. Recovery uses a separate rotating secret saved only in that browser profile; it never appears in invitation links or routine logs. Clearing site data or using a different browser loses that identity.
+Unexpected disconnects reserve seats for **two minutes**, counted from server-side detection. Reserved players count toward the twelve-player limit. Each occupied seat has a distinct color and stable number (01–12), preserved through recovery. Nicknames and room codes are not recovery credentials. Recovery uses a separate rotating secret saved only in that browser profile; it never appears in invitation links or routine logs. Clearing site data or using a different browser loses that identity.
 
 Startup waits up to 90 seconds for a slow/waking host, using short health attempts. You can cancel joining or rejoining immediately. This wait does not extend an existing seat reservation or resurrect a party after restart. Render can show its own loading screen before our page loads; app feedback begins only afterward.
 
@@ -99,12 +99,14 @@ npm test
 npm run test:browser
 npm run build
 npm run test:production
+npm run test:twelve
 npm run test:expiry
 ```
 
 - `check` checks syntax for all project JavaScript and rejects project TypeScript source.
 - `test` runs focused rules, input, recovery and real local HTTP/WebSocket session tests, including 100/250 ms added socket RTT. These do not require the development server.
 - `test:production` verifies the built server and browser flows (build first); `test:expiry` separately spends the full ordinary 120-second reservation wait.
+- `test:twelve` runs twelve independent SDK players through capacity, recovery, simultaneous movement, a full round and replay on its own local server (port 2584). Setting `PLAYTEST_URL` explicitly targets an authorized HTTPS deployment instead; it creates one temporary party and leaves afterward.
 - `test:browser` launches installed **Chrome and Edge** in headless mode, starts its own server on port **2579**, and uses a separate port **2580** for restart testing. It does not control your everyday browser profiles. Keep those ports free. Playwright is included; no global tooling or interactive login is needed. Browser overrides `TEST_HOST_BROWSER` and `TEST_GUEST_BROWSER` are available, but record any change from two different browsers.
 
 Browser tests accelerate countdowns and reservation expiry. Normal gameplay defaults stay unchanged. See [docs/verification.md](docs/verification.md) for the recorded results and what remains unverified.
@@ -118,7 +120,7 @@ One Node process runs Colyseus and the Vite middleware on the same origin and po
 | Symptom | Next action |
 | --- | --- |
 | Port 2567 already in use | Stop the previous process, or set `$env:PORT = '2568'` before `npm start` and open that printed URL. |
-| Party full | Four connected or reserved seats are occupied. Have someone leave explicitly or wait for expiry. |
+| Party full | Twelve connected or reserved seats are occupied. Have someone leave explicitly or wait for expiry. |
 | Another tab is active | Use that tab, close it and click **Try this tab again**, or use a different browser/profile for a second player. |
 | No movement | Wait for the round, use WASD/arrows or enable Touch controls and drag. Eliminated players and spectators cannot move. |
 | Reconnecting persists | The host may be waking or unavailable. Cancel if needed; after expiry, join again or create a new party. |
@@ -135,4 +137,4 @@ The phase specification is [instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md](inst
 
 This prototype has one minigame, keyboard/touch controls, placeholder art and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery, audio or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
 
-The first hosted computer + real-phone playtest passed by owner report. Four-player play, network switching/background suspension, and a friend on another network remain pending. Browser emulation and owner-reported experience are recorded separately. Use [the playtest sheet](docs/playtest.md) for broader coverage.
+The first hosted computer + real-phone playtest passed by owner report. Twelve-person play, network switching/background suspension, and a friend on another network remain pending. Automated twelve-client checks, browser emulation and owner-reported experience are recorded separately. Use [the playtest sheet](docs/playtest.md) for broader coverage.

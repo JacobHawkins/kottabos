@@ -247,6 +247,73 @@ test('countdown captures connected participants; reset preserves scores and clea
   assert.equal(state.players.get('2').alive, false);
 });
 
+test('twelve participants start on distinct, separated safe tiles around a symmetric inset perimeter', () => {
+  const state = fixture(12);
+  const round = createRound(state, { seed: 'full-party-spawns' });
+  const players = [...state.players.values()];
+  assert.equal(round.participantIds.length, 12);
+  assert.equal(new Set(players.map(tileIndexAt)).size, 12);
+  const positions = new Set(players.map(({ x, y }) => `${x},${y}`));
+  for (const player of players) {
+    assert.ok(player.connected && player.participating && player.alive);
+    assert.equal(player.score, 5, 'starting a round preserves party scores');
+    assert.equal(state.tiles[tileIndexAt(player)], TILE_SAFE);
+    assert.ok(player.x >= ARENA.tileSize && player.x <= ARENA.width - ARENA.tileSize);
+    assert.ok(player.y >= ARENA.tileSize && player.y <= ARENA.height - ARENA.tileSize);
+    assert.ok(positions.has(`${ARENA.width - player.y},${player.x}`), 'the layout has quarter-turn symmetry');
+    const column = Math.floor(player.x / ARENA.tileSize);
+    const row = Math.floor(player.y / ARENA.tileSize);
+    assert.ok(column < 2 || column > 4 || row < 2 || row > 4, 'no player starts on a potential final square');
+  }
+  for (let first = 0; first < players.length; first += 1) {
+    for (let second = first + 1; second < players.length; second += 1) {
+      assert.ok(Math.hypot(players[first].x - players[second].x, players[first].y - players[second].y) >= ARENA.tileSize,
+        'every pair starts at least one tile apart');
+    }
+  }
+});
+
+test('all twelve players move authoritatively and eleven falls produce one cached winner', () => {
+  const state = fixture(12);
+  const round = createRound(state, { seed: 'full-party-movement' });
+  round.schedule = [];
+  const before = new Map([...state.players].map(([id, player]) => [id, { x: player.x, y: player.y }]));
+  const inputs = new Map([...state.players].map(([id, player]) => [id, {
+    x: Math.sign(ARENA.width / 2 - player.x), y: Math.sign(ARENA.height / 2 - player.y),
+  }]));
+  assert.equal(updateRound(state, round, { dtMs: 100, inputs }), null);
+  for (const [id, player] of state.players) {
+    const start = before.get(id);
+    assert.ok(Math.abs(Math.hypot(player.x - start.x, player.y - start.y) - PLAYER_SPEED / 10) < 0.00001,
+      `${id} moves at the same bounded speed`);
+  }
+  round.schedule = [...state.players].filter(([id]) => id !== '11')
+    .map(([, player]) => ({ tile: tileIndexAt(player), warningAt: 100, goneAt: 1_900 }));
+  assert.equal(updateRound(state, round, { dtMs: 1_799 }), null);
+  assert.ok([...state.players.values()].every((player) => player.alive));
+  const outcome = updateRound(state, round, { dtMs: 1 });
+  assert.deepEqual(outcome.winnerIds, ['11']);
+  assert.deepEqual(outcome.pointsByPlayer, { 11: 3 });
+  assert.equal(outcome.reason, 'last-survivor');
+  assert.deepEqual([...state.players].filter(([, player]) => player.alive).map(([id]) => id), ['11']);
+  assert.equal(updateRound(state, round, { dtMs: 45_000 }), outcome);
+  assert.equal(finishRound(state, round), outcome);
+  assert.ok([...state.players.values()].every((player) => player.score === 5), 'only the party layer awards cumulative points');
+});
+
+test('a twelve-way deadline tie awards each participant once in the cached outcome', () => {
+  const state = fixture(12);
+  const round = createRound(state, { seed: 'full-party-tie' });
+  round.schedule = [];
+  const outcome = updateRound(state, round, { dtMs: round.durationMs });
+  assert.equal(outcome.reason, 'deadline');
+  assert.equal(outcome.resultText, '12 players tie! +1 point each');
+  assert.deepEqual(outcome.winnerIds, [...state.players.keys()]);
+  assert.deepEqual(outcome.pointsByPlayer, Object.fromEntries([...state.players.keys()].map((id) => [id, 1])));
+  assert.equal(updateRound(state, round, { dtMs: round.durationMs }), outcome);
+  assert.equal(finishRound(state, round), outcome);
+});
+
 test('warnings do not eliminate until the exact disappearance step', () => {
   const state = fixture();
   const round = createRound(state);
@@ -284,6 +351,7 @@ test('deadline survivors tie and late spectators never earn points', () => {
   assert.equal(state.roundElapsedMs, 3000);
   assert.equal(outcome.reason, 'deadline');
   assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
+  assert.equal(outcome.resultText, 'Player 0 & Player 1 tie! +1 point each');
 });
 
 test('disconnected players stop moving, remain vulnerable, and cannot revive on rejoin', () => {

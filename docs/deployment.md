@@ -50,7 +50,7 @@ Before later sessions, inspect workspace Billing → Monthly Included Usage and 
 
 ## Public protections and limits
 
-The pilot caps total rooms at four and each room at four reserved/connected players. HTTP budgets per direct socket peer per minute: 12 create requests, 240 other matchmaking/leave requests, 240 party lookups; 240 WebSocket upgrades. A family sharing a network fits comfortably. Proxy peers may share budgets too; arbitrary forwarded IP headers cannot bypass them. The limiter holds at most 2,048 live buckets. These are bounded pilot safeguards, not a general DDoS service.
+The pilot caps total rooms at four and each room at twelve reserved/connected players. The resulting 48-seat process ceiling is a configured bound, not measured concurrent capacity; twelve-client acceptance covers one party. HTTP budgets per direct socket peer per minute: 12 create requests, 240 other matchmaking/leave requests, 240 party lookups; 240 WebSocket upgrades. A family sharing a network fits comfortably. Proxy peers may share budgets too; arbitrary forwarded IP headers cannot bypass them. The limiter holds at most 2,048 live buckets. These are bounded pilot safeguards, not a general DDoS service.
 
 HTTP JSON and WebSocket messages are capped at 4 KiB. Colyseus also bounds connection messages, while game input has its own sequence/rate/queue/age validation. Browser HTTP and WebSocket origins must match the configured public origin. Originless native SDK/health requests are allowed and remain rate-limited where relevant. Short party codes are invitations, not strong private access control.
 

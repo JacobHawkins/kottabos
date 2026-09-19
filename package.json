@@ -11,6 +11,7 @@
     "start:prod": "node scripts/production.js",
     "test": "node --test tests/*.test.js",
     "test:expiry": "node --test tests/acceptance/expiry.js",
+    "test:twelve": "node --test tests/acceptance/twelve-player.test.js",
     "test:remote": "playwright test --config playwright.remote.config.js",
     "test:browser": "playwright test",
     "test:production": "node --test tests/acceptance/production.test.js && playwright test --config playwright.production.config.js",

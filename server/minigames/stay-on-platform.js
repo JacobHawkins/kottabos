@@ -4,10 +4,21 @@ import {
 import { movePlayer, tileIndexAt } from '../../shared/movement.js';
 
 const SPAWNS = [
+  // Tile centers around the inset perimeter, in opposite pairs. The first four
+  // retain the original corner starts; the full set has quarter-turn symmetry
+  // and at least one tile of separation without giving anyone a central start.
   { x: 96, y: 96 },
   { x: 352, y: 352 },
   { x: 352, y: 96 },
   { x: 96, y: 352 },
+  { x: 160, y: 96 },
+  { x: 288, y: 352 },
+  { x: 352, y: 160 },
+  { x: 96, y: 288 },
+  { x: 288, y: 96 },
+  { x: 160, y: 352 },
+  { x: 352, y: 288 },
+  { x: 96, y: 160 },
 ];
 
 function seededRandom(seed) {
@@ -150,7 +161,8 @@ export function finishRound(state, round, reason = 'deadline') {
   if (winnerIds.length === 1 && awardedPoints === 3) {
     resultText = `${nameList(state, winnerIds)} wins! +3 points`;
   } else if (winnerIds.length > 0) {
-    resultText = `${nameList(state, winnerIds)} tie! +1 point each`;
+    const winners = winnerIds.length > 3 ? `${winnerIds.length} players` : nameList(state, winnerIds);
+    resultText = `${winners} tie! +1 point each`;
   }
   round.outcome = {
     winnerIds: [...winnerIds],

@@ -1,7 +1,9 @@
 import { PartySession, claimBrowserTab } from './session.js';
 import { Controls } from './controls.js';
+import { MAX_PLAYERS, PLAYER_COLORS } from '../shared/constants.js';
 
 const $ = (id) => document.getElementById(id);
+$('player-count').textContent = `0 / ${MAX_PLAYERS}`;
 if (import.meta.env.DEV) {
   document.querySelector('.site-footer').insertAdjacentHTML('beforebegin', '<details id="diagnostics" hidden><summary>Local diagnostics <span id="diagnostic-summary"></span></summary><div class="diagnostic-content"><output id="diagnostic-values"></output><button id="simulate-drop" class="secondary">Test a 3-second connection drop</button><p>Development tools. Scores and floor hazards keep running while disconnected.</p></div></details>');
 }
@@ -55,14 +57,16 @@ function renderRoster(state) {
     ({ id, name, color, connected, ready, score, alive, participating, roundPoints }))) + state.hostId + state.phase + session.playerId;
   if (key === lastRoster) return;
   lastRoster = key;
-  const rows = players.map((player, index) => {
+  const rows = players.map((player) => {
     const row = document.createElement('li');
     row.className = 'player-row';
     row.dataset.playerId = player.id;
+    row.classList.toggle('local-player', player.id === session.playerId);
     const avatar = document.createElement('span');
     avatar.className = 'avatar';
     avatar.style.setProperty('--player-color', player.color);
-    avatar.textContent = `0${index + 1}`;
+    avatar.textContent = String(PLAYER_COLORS.indexOf(player.color) + 1).padStart(2, '0');
+    avatar.setAttribute('aria-label', `Player ${Number(avatar.textContent)}`);
     const info = document.createElement('div');
     info.className = 'player-info';
     const name = document.createElement('div');
@@ -84,7 +88,14 @@ function renderRoster(state) {
     return row;
   });
   $('players-list').replaceChildren(...rows);
-  $('player-count').textContent = `${players.length} / 4`;
+  $('player-count').textContent = `${players.length} / ${MAX_PLAYERS}`;
+  const awards = players.filter((player) => player.roundPoints > 0).map((player) => {
+    const award = document.createElement('span');
+    award.className = 'result-award';
+    award.textContent = `${player.name} +${player.roundPoints}`;
+    return award;
+  });
+  $('results-detail').replaceChildren(...(awards.length ? awards : ['No points awarded this round.']));
 }
 
 function render(state) {
@@ -116,7 +127,6 @@ function render(state) {
       : me?.participating && me.alive ? 'Make every tile count.' : 'You’re spectating. You can play in the next round.';
   $('results-panel').hidden = state.phase !== 'results';
   $('result-text').textContent = state.resultText;
-  $('results-detail').textContent = players.filter((player) => player.roundPoints > 0).map((player) => `${player.name} +${player.roundPoints}`).join(' · ') || 'No points awarded this round.';
   $('player-mode').textContent = me?.participating && !me.alive ? 'SPECTATING' : state.phase === 'playing' && !me?.participating ? 'NEXT ROUND IS YOURS' : 'YOU’VE GOT THIS';
   if (import.meta.env.DEV) $('simulate-drop').disabled = !online;
   renderRoster(state);
@@ -135,7 +145,7 @@ function renderClock() {
   banner.classList.toggle('countdown', state.phase === 'countdown' && session.connection === 'connected');
   banner.hidden = state.phase === 'playing' && me?.alive && session.connection === 'connected';
   banner.firstElementChild.textContent = session.connection !== 'connected' ? 'Reconnecting… your spot is reserved'
-    : state.phase === 'lobby' ? 'Ready up. Your next good story starts here.'
+    : state.phase === 'lobby' ? 'Ready up to start.'
       : state.phase === 'countdown' ? Math.max(1, seconds)
         : state.phase === 'results' ? 'One more round?'
           : me?.participating ? 'You fell! Watch the survivors, then try again.' : 'You’re spectating. Join the next round.';

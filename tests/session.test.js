@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../server/app.js';
-import { STEP_MS, PLAYER_SPEED } from '../shared/constants.js';
+import { MAX_PLAYERS, STEP_MS, PLAYER_SPEED } from '../shared/constants.js';
 
 async function until(predicate, message, timeout = 3000) {
   const deadline = Date.now() + timeout;
@@ -192,19 +192,21 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     assert.equal(authoritative.state.players.size, 2);
   });
 
-  await t.test('four seats include reservations; expiry releases seat and invalidates credential', async () => {
-    const third = track(await client.joinById(first.roomId, { name: 'Cedar' }));
-    const fourth = track(await client.joinById(first.roomId, { name: 'Dahlia' }));
-    await until(() => authoritative.state.players.size === 4, 'four seats occupied');
-    const fourthId = Array.from(authoritative.state.players.values()).find((player) => player.name === 'Dahlia').id;
-    const token = await drop(fourth, authoritative, fourthId);
+  await t.test('twelve seats include reservations; expiry releases seat and invalidates credential', async () => {
+    const guests = [];
+    for (let index = 2; index < MAX_PLAYERS; index++) {
+      guests.push(track(await client.joinById(first.roomId, { name: `Seat ${index + 1}` })));
+    }
+    await until(() => authoritative.state.players.size === MAX_PLAYERS, 'all twelve seats occupied');
+    const droppedId = Array.from(authoritative.state.players.values()).find((player) => player.name === `Seat ${MAX_PLAYERS}`).id;
+    const token = await drop(guests.pop(), authoritative, droppedId);
     await assert.rejects(client.joinById(first.roomId, { name: 'Elm' }));
-    await until(() => !authoritative.state.players.has(fourthId), 'reservation expires', 2000);
+    await until(() => !authoritative.state.players.has(droppedId), 'reservation expires', 2000);
     await assert.rejects(new Client(endpoint).reconnect(token));
     const replacement = track(await client.joinById(first.roomId, { name: 'Elm' }));
-    await until(() => authoritative.state.players.size === 4, 'released seat can be joined');
-    await third.leave();
-    await replacement.leave();
+    await until(() => authoritative.state.players.size === MAX_PLAYERS, 'released seat can be joined');
+    await Promise.all([...guests, replacement].map((room) => room.leave()));
+    await until(() => authoritative.state.players.size === 2, 'temporary players leave');
   });
 
   await t.test('authenticated HTTP leave releases a dropped reservation, rejecting guessed credentials', async () => {

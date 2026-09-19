@@ -1,5 +1,23 @@
 # Verification record
 
+## September 19, 2026 — twelve-player foundation
+
+The owner expanded the shared party maximum to **twelve**, for the current game and future minigames. Admission and reserved-seat limits now use twelve; every occupied seat has a distinct color and stable number. The current game has twelve separated starting positions, a four-column/three-row lobby, compact phone rosters, prominent local identity and wrapped result awards. The two-square finale and two-minute recovery remain intact.
+
+Local verification on Node **24.21.0**:
+
+- `npm run check`, `npm run build`, and **54 focused tests** passed. These include 19 rule tests and a real full-capacity reservation/expiry test. Existing controlled 100/250 ms game WebSocket delay/recovery checks passed.
+- `npm run test:production` passed **two server/protection tests and all nine built-browser cases** in 55.9 seconds of browser execution. The new twelve-player browser case uses Chrome touch/viewport emulation plus Edge and ten actual SDK sockets. It checks all twelve numbered characters painted within the board, phone overflow at 390/320-pixel portrait and 844×390 landscape, identity numbering after seat replacement, results/replay, full-capacity refresh and host transfer. Existing touch movement/release/rotation cases passed.
+- `npm run test:browser` passed **all fourteen development-browser cases** in 1.7 minutes, including original whole-browser reopen, eliminated refresh, duplicate-tab protection and server restart.
+- `npm run test:twelve` (the standalone `tests/acceptance/twelve-player.test.js`) passed a complete **20-second round with twelve independent SDK sockets**, all twelve surviving the final pair, full-capacity recovery with credential rotation, thirteenth-player rejection while connected and reserved, all-player movement, identical scores/results, replay, host transfer, replacement and a second-round start. Its controllers use visible synchronized warnings, never the private future schedule. Cleanup disposed the party.
+- The local SDK run observed 240 game pings: median **1 ms**, p95 **3 ms**, maximum sampled server simulation callback **1.37 ms**. These are observations from one automated local party, excluding encoding/transport from callback timing; they are not a hosting or physical-device performance guarantee.
+
+Screenshot review covered portrait, landscape, desktop and results. It found an overlapping lobby banner in short landscape; the text was shortened, and a browser assertion now checks the banner stays below the bottom row. The final syntax check, production rebuild and twelve-player built-browser case passed again (17.0 seconds), and the updated landscape screenshot visibly shows all twelve unobscured characters. The existing Phaser bundle-size warning remains.
+
+Publication and public twelve-client acceptance will be recorded after the manual deployment.
+
+Twelve physical players, real iPhone performance at that size and four concurrent full parties are **not** established by these checks. The first successful human computer/phone report below predates this update. No dependencies, hosting tier, extra service or automatic deploy setting were changed. The original brief and prior verification sections remain historical records.
+
 ## September 19, 2026 — two-square finale update
 
 The owner requested two final squares with a random last removal. A round now shrinks toward one of twelve adjacent pairs in the central 3×3 area. For a normal 45-second round, both are safe from 38.2 to 40.7 seconds, one warns for the full 1.8 seconds, and it disappears at 42.5 seconds. The final choice uses a separate seeded stream from the earlier collapse pattern. Early elimination can still finish a round before these stages.

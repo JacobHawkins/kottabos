@@ -4,7 +4,7 @@ const port = Number(process.env.BROWSER_TEST_PORT || 2581);
 const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: ['mobile.spec.js', 'production.spec.js', 'recovery.spec.js'],
+  testMatch: ['mobile.spec.js', 'production.spec.js', 'recovery.spec.js', 'twelve-player.spec.js'],
   timeout: 90_000,
   expect: { timeout: 12_000 },
   workers: 1,
