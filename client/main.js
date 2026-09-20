@@ -35,9 +35,15 @@ function renderStatus(connection, message) {
 
 async function ensureGame() {
   if (game || loadingGame) return;
+  const loadingRoom = session.room;
   loadingGame = import('./game.js').then(({ createGame }) => {
     if (session.state) game = createGame(session, controls);
-  }).catch(() => notice('The game renderer could not load. Refresh once; your reserved identity will rejoin automatically.'))
+  }).catch(() => {
+    // A late import failure must not replace a leave, ended-session or recovery notice.
+    if (session.room === loadingRoom && session.state && session.connection === 'connected') {
+      notice('The game renderer could not load. Refresh once; your reserved identity will rejoin automatically.');
+    }
+  })
     .finally(() => { loadingGame = null; });
 }
 

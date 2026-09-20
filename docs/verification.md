@@ -8,7 +8,11 @@ Local pre-release verification passed on Node 24.21.0: `npm run check`, `npm run
 
 Read-only Render account inspection confirmed the existing service still uses Free compute and the workspace remains Hobby with no card on file. Usage at inspection was 2.4 of 750 Free hours, 10 MB of 5 GB bandwidth and 1 of 500 pipeline minutes; current/projected charges were $0. No billing settings or unrelated services were changed.
 
-The existing GitHub-connected Render service was saved and verified as **After CI Checks Pass**, branch `main`. GitHub main protection now requires a pull request, an up-to-date branch and the `validate` check, including administrators; force pushes and deletion are disabled. No second reviewer is required for this owner-managed repository. Remote CI and deployment results will be recorded after verification.
+The existing GitHub-connected Render service was saved and verified as **After CI Checks Pass**, branch `main`. GitHub main protection now requires a pull request, an up-to-date branch and the `validate` check from the GitHub Actions app, including administrators; force pushes and deletion are disabled. No second reviewer is required for this owner-managed repository. [Release PR #1](https://github.com/JacobHawkins/kottabos/pull/1) carries the final CI and deployment evidence; Render's Deploys page identifies the currently live revision.
+
+The first two GitHub runs passed syntax, rules/session and twelve-player checks, but exposed browser test races on the Linux runner: a refresh snapshot could be taken before the sprite scene loaded, and the restart test could stop the server during the initial renderer download. The tests now wait for exactly one scene and the local character's first rendered position before checking repeated refreshes or intentionally restarting the server. Original identity, score, scene-count and listener-count assertions remain. These failures blocked promotion to main, leaving the live service unchanged.
+
+Both affected cases passed locally after the synchronization fix. A related renderer import error is now displayed only for the same still-connected party, so a late failure cannot overwrite leave/ended/recovery feedback. Two deterministic browser regressions hold the module request and release its failure after the desired session state; both passed locally, including the check that a genuine connected-party renderer failure still reports its error.
 
 ## September 20, 2026 — supplied Universal LPC sprite sheet
 

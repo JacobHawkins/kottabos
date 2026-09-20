@@ -56,6 +56,14 @@ async function connected(page, expectedId) {
   return snapshot(page);
 }
 
+async function rendererReady(page) {
+  // Session recovery can finish before the lazy module, scene and sprite load.
+  await expect.poll(async () => {
+    const state = await snapshot(page);
+    return { sceneCount: state?.sceneCount, playerRendered: Boolean(state?.renderedPositions?.[state.playerId]) };
+  }, { message: 'One scene has loaded and rendered the local player' }).toEqual({ sceneCount: 1, playerRendered: true });
+}
+
 async function createParty(page, baseURL, name = 'Athena') {
   await page.goto(baseURL);
   await page.locator('#nickname').fill(name);
@@ -148,8 +156,7 @@ test('Chrome + Edge lobby, repeated refresh, dropped connection, close/reopen, d
   expect(code).toMatch(/^[A-Z0-9]{4,8}$/);
   await joinParty(guest, baseURL, code, 'Hermes', true);
   await countPlayers(host, 2);
-  await expect.poll(async () => (await snapshot(host)).sceneCount).toBe(1);
-  await expect.poll(async () => (await snapshot(guest)).sceneCount).toBe(1);
+  await Promise.all([rendererReady(host), rendererReady(guest)]);
   await host.screenshot({ path: testInfo.outputPath('lobby.png'), fullPage: true });
   const initial = await snapshot(host);
   const guestInitial = await snapshot(guest);
@@ -162,7 +169,9 @@ test('Chrome + Edge lobby, repeated refresh, dropped connection, close/reopen, d
   await test.step('Repeated refresh retains identity, one scene, and stable listeners', async () => {
     for (let refresh = 0; refresh < 3; refresh += 1) {
       await guest.reload();
-      const state = await connected(guest, guestId);
+      await connected(guest, guestId);
+      await rendererReady(guest);
+      const state = await snapshot(guest);
       await countPlayers(host, 2);
       expect(state.listenerCount).toBe(guestInitial.listenerCount);
       expect(state.sceneCount).toBe(guestInitial.sceneCount);
@@ -438,6 +447,8 @@ test('A restarted server explains the ended session and offers a working new par
     const code = await createParty(host, baseURL);
     await joinParty(guest, baseURL, code);
     const originalId = (await snapshot(host)).playerId;
+    // Restart a fully loaded party, rather than interrupting initial JS/art downloads.
+    await Promise.all([rendererReady(host), rendererReady(guest)]);
     await stopServer();
     await startServer();
     await expect(host.locator('#notice')).toContainText(/restarted|unavailable|ended|no longer/i, { timeout: 20_000 });

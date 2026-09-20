@@ -6,7 +6,7 @@ A small browser party game for **two to twelve people**. Create a private party,
 
 Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) preserves the initial specification; the owner subsequently expanded the shared party maximum to 12. Future minigames should reuse this party, recovery and score foundation. No TypeScript source or compilation workflow is used.
 
-The September 20 player-triggered floors, host-only starting, expanded round view and character updates are implemented. GitHub protects `main` with required pull requests and passing `validate` checks, and Render is configured to deploy it after CI passes. The first automated release is being verified; [verification](docs/verification.md) records the confirmed live revision and deployment evidence.
+The September 20 update adds player-triggered floors, host-only starting, an expanded round view and animated LPC characters. GitHub protects `main` with required pull requests and passing `validate` checks, and Render deploys it after CI passes. See [verification](docs/verification.md) and the [initial release pull request](https://github.com/JacobHawkins/kottabos/pull/1) for checks and deployment evidence.
 
 ## Start locally
 
