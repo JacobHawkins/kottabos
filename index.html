@@ -13,7 +13,7 @@
     <div class="shell">
       <header class="masthead">
         <a class="wordmark" href="/" aria-label="Kottabos home"><span class="brand-mark">k</span> kottabos<span class="edition">YOUR PEOPLE / ONE FLOOR</span></a>
-        <span id="connection-status" class="status" role="status">Getting ready…</span>
+        <div class="session-actions"><span id="connection-status" class="status" role="status">Connecting…</span><button id="leave-button" class="text-button" hidden>Leave party ↗</button></div>
       </header>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="tab-blocked" class="panel blocked" hidden>
@@ -28,7 +28,7 @@
           <h1>A little<br />friendly <em>chaos.</em></h1>
           <p class="lede">Bring your people. Find your footing.<br />Try to be the last one standing.</p>
           <div class="home-tags"><span>NO ACCOUNTS</span><span>TOUCH OR KEYS</span><span>QUICK ROUNDS</span></div>
-          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Ready up.</strong> The party starter kicks things off.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> The floor has other plans.</p></div>
+          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Gather your people.</strong> The host starts the round.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> Every tile you step on starts to fall.</p></div>
         </section>
         <section class="panel join-panel">
           <div class="tile-emblem" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="warning-tile"></i><i></i><i></i><i></i><i class="missing-tile"></i><b>●</b></div>
@@ -55,8 +55,7 @@
             <p id="invitation-feedback" class="muted">Share this code or copy your party link.</p>
             <label class="sr-only" for="invite-link">Invitation link</label><input id="invite-link" readonly aria-label="Invitation link" />
             <div class="party-actions">
-              <button id="ready-button" class="primary full">Ready up</button>
-              <button id="start-button" class="secondary full" hidden>Start round</button>
+              <button id="start-button" class="primary full" hidden>Start round</button>
               <button id="replay-button" class="primary full" hidden>Play again</button>
               <p id="lobby-hint" class="fine-print"></p>
             </div>
@@ -64,11 +63,10 @@
             <ul id="players-list" class="players-list"></ul>
             <p class="fine-print host-note">Refresh or disconnect passes host controls to another connected player.</p>
           </section>
-          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>Move off flashing amber tiles before they fall. Survive together, or outlast everyone. Match your numbered character to the roster; yours has a white ring.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Tied survivors: +1 point each</p></section>
-          <button id="leave-button" class="text-button">Leave party ↗</button>
+          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>The tile beneath each player starts a 1.8-second countdown. Once amber, it will fall even after you leave. Untouched tiles stay safe. Keep moving and outlast everyone.</p><p>Match your numbered character to the roster; yours has a white ring.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Simultaneous final falls: +1 point each</p></section>
         </aside>
         <section class="arena-column">
-          <div class="arena-heading"><div><div id="round-label" class="eyebrow">STAY ON THE PLATFORM</div><h1 id="phase-label">Lobby</h1></div><div class="round-clock"><span id="timer-value">—</span><span id="timer-label">UNTIL THE CHAOS</span></div></div>
+          <div class="arena-heading"><div><div id="round-label" class="eyebrow">STAY ON THE PLATFORM</div><h1 id="phase-label">Lobby</h1></div><div class="round-clock"><span id="timer-value">—</span><span id="timer-label">HOST STARTS THE ROUND</span></div></div>
           <div class="play-area">
             <div class="stage"><div id="game-container" role="img" aria-label="Game arena: move with the touch joystick, W A S D, or arrow keys" tabindex="0"></div><div id="stage-banner" class="stage-banner"><span>Waiting for the gang</span></div></div>
             <div class="touch-options">
@@ -79,11 +77,11 @@
               </div>
             </div>
           </div>
-          <div class="arena-footer"><span><i class="legend safe"></i> SAFE</span><span><i class="legend warning"></i> GET MOVING</span><span><i class="legend gone"></i> TOO LATE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
+          <div class="arena-footer"><span><i class="legend safe"></i> UNTOUCHED</span><span><i class="legend warning"></i> FALLS IN 1.8s</span><span><i class="legend gone"></i> GONE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
           <section id="results-panel" class="panel results-panel" hidden><span class="eyebrow">ROUND COMPLETE</span><h2 id="result-text"></h2><p id="results-detail"></p></section>
         </section>
       </main>
-      <footer class="site-footer"><span>SMALL GAME. GOOD COMPANY.</span><span>Made for a little friendly competition.</span></footer>
+      <footer class="site-footer"><span>Character art: Universal LPC contributors · <a id="character-credits" href="https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/blob/82283ac096a760c46b22336df3fc2a23f43e3fda/CREDITS.csv" download="character-credits.csv">Credits</a> · <a href="https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/blob/82283ac096a760c46b22336df3fc2a23f43e3fda/README.md#licensing-and-attribution-credits" target="_blank" rel="noopener noreferrer">Art source &amp; licenses</a></span><span>SMALL GAME. GOOD COMPANY.</span></footer>
     </div>
     <script type="module" src="/client/main.js"></script>
   </body>

@@ -7,6 +7,7 @@ import { performance } from 'node:perf_hooks';
 import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../server/app.js';
 import { PLAYER_SPEED, STEP_MS } from '../shared/constants.js';
+import { tileIndexAt } from '../shared/movement.js';
 
 async function until(predicate, message, timeout = 6000) {
   const deadline = Date.now() + timeout;
@@ -89,23 +90,7 @@ test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and
       host.send('ping', { sentAt: pingStarted });
       await until(() => gameRtt !== undefined, 'game WebSocket ping returns');
       assert.ok(gameRtt >= addedRtt * 0.85 && gameRtt < addedRtt + 1000, `actual WebSocket RTT was ${gameRtt} ms`);
-      host.send('ready', true);
-      guest.send('ready', true);
-      await until(() => [...authoritative.state.players.values()].every((player) => player.ready), 'delayed readiness applies');
-      host.send('start');
-      await until(() => host.state.phase === 'playing' && guest.state.phase === 'playing', 'both receive playing phase');
-      // Keep this network acceptance focused on protocol ordering; hazard
-      // correctness has separate rule tests and is exercised explicitly below.
-      authoritative.roundGame.schedule = [];
       const player = authoritative.state.players.get(hostId);
-      const originalX = player.x;
-      const movementStarted = performance.now();
-      host.send('input', { seq: 1, x: 1, y: 0 });
-      host.send('input', { seq: 1, x: 1, y: 0 });
-      await until(() => guest.state.players.get(hostId).lastInputSeq === 1, 'remote observes acknowledged movement through delayed frames');
-      assert.ok(performance.now() - movementStarted >= addedRtt * 0.85, 'input and remote state both crossed the delayed proxy');
-      assert.ok(Math.abs(player.x - originalX - PLAYER_SPEED * STEP_MS / 1000) < 0.001, 'duplicate sequence moves exactly once');
-
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const token = host.reconnectionToken;
         host.reconnection.enabled = false;
@@ -122,12 +107,27 @@ test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and
         assert.equal(authoritative.state.hostId, guestId, 'recovered creator cannot reclaim host');
       }
 
+      guest.send('start');
+      await until(() => host.state.phase === 'playing' && guest.state.phase === 'playing', 'transferred host starts without readiness');
+      const originalX = player.x;
+      const movementStarted = performance.now();
+      host.send('input', { seq: 1, x: 1, y: 0 });
+      host.send('input', { seq: 1, x: 1, y: 0 });
+      await until(() => guest.state.players.get(hostId).lastInputSeq === 1, 'remote observes acknowledged movement through delayed frames');
+      assert.ok(performance.now() - movementStarted >= addedRtt * 0.85, 'input and remote state both crossed the delayed proxy');
+      assert.ok(Math.abs(player.x - originalX - PLAYER_SPEED * STEP_MS / 1000) < 0.001, 'duplicate sequence moves exactly once');
+
+      const survivor = authoritative.state.players.get(guestId);
+      const spawn = tileIndexAt(survivor);
+      for (let seq = 1; seq <= 8; seq += 1) {
+        guest.send('input', { seq, x: -1, y: 0 });
+        await delay(STEP_MS);
+      }
+      await until(() => tileIndexAt(survivor) !== spawn, 'guest escapes its armed spawn under latency');
       const token = host.reconnectionToken;
       host.reconnection.enabled = false;
       host.connection.close(4010, 'hazard interruption');
       await until(() => !player.connected, 'hazard victim is disconnected');
-      const tile = Math.floor(player.y / 64) * 7 + Math.floor(player.x / 64);
-      authoritative.roundGame.schedule = [{ tile, warningAt: 0, goneAt: 0 }];
       await until(() => authoritative.state.phase === 'results', 'disconnected character remains vulnerable');
       host = track(await client.reconnect(token));
       await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'delayed clients agree on results');

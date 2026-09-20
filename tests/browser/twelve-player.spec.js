@@ -44,8 +44,8 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
     const originalBadges = await badges(host);
     expect(new Set(Object.values(originalBadges)).size).toBe(12);
     expect(Object.values(originalBadges).sort()).toEqual(Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0')));
-    // Every colored character is actually painted inside the board, not merely
-    // present in a DOM roster or outside the visible lobby canvas.
+    // Every colored identity marker is painted inside the board, not merely
+    // present in a DOM roster; the sprite suite checks the shared artwork.
     await expect.poll(() => host.evaluate(() => {
       const canvas = document.querySelector('#game-container canvas');
       if (!canvas) return false;
@@ -56,7 +56,8 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
         for (let offset = 0; offset < pixels.length; offset += 4) {
           if (!rgb.every((value, channel) => value === pixels[offset + channel])) continue;
           const x = offset / 4 % canvas.width, y = Math.floor(offset / 4 / canvas.width);
-          if (x < 50 || x >= 498 || y < 50 || y >= 498) return false;
+          const padding = (canvas.width - 448) / 2;
+          if (x < padding || x >= canvas.width - padding || y < padding || y >= canvas.height - padding) return false;
           count++;
         }
         return count > 100;
@@ -75,6 +76,7 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
     expect(stage.y + stage.height).toBeLessThanOrEqual(391);
     expect(joystick.y + joystick.height).toBeLessThanOrEqual(391);
     expect(joystick.x).toBeGreaterThan(stage.x + stage.width);
+    await host.screenshot({ path: testInfo.outputPath('twelve-phone-landscape.png'), fullPage: true });
     expect(await host.evaluate(() => {
       const canvas = document.querySelector('#game-container canvas');
       const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
@@ -87,10 +89,9 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
         }
       }
       const bounds = canvas.getBoundingClientRect();
-      return bounds.y + (lastCharacterRow + 1) * bounds.height / canvas.height <
-        document.querySelector('#stage-banner span').getBoundingClientRect().top;
-    }), 'the lobby banner stays below the bottom row of characters').toBe(true);
-    await host.screenshot({ path: testInfo.outputPath('twelve-phone-landscape.png'), fullPage: true });
+      return document.querySelector('#stage-banner span').getBoundingClientRect().top -
+        (bounds.y + (lastCharacterRow + 1) * bounds.height / canvas.height);
+    }), 'the lobby banner stays below the bottom row of characters').toBeGreaterThan(0);
 
     const departing = [...bots][0];
     await departing.leave();
@@ -101,9 +102,7 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
     await expect(host.locator('.player-row')).toHaveCount(12);
     expect(new Set(Object.values(await badges(host))).size).toBe(12);
 
-    await host.locator('#ready-button').tap();
-    await guest.locator('#ready-button').click();
-    for (const room of bots) room.send('ready', true);
+    await expect(host.locator('#ready-button')).toHaveCount(0);
     await expect(host.locator('#start-button')).toBeEnabled();
     await host.locator('#start-button').tap();
     for (const page of [host, guest]) await expect(page.locator('#phase-label')).toHaveAttribute('data-phase', 'playing');

@@ -1,10 +1,12 @@
 # Kottabos
 
-A small browser party game for **two to twelve people**. Create a private party, share its code, ready up, and survive a disappearing floor. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, and let the host start a round on a floor that falls beneath your footsteps. The same party keeps its scores between rounds.
 
 **Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
 Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) preserves the initial specification; the owner subsequently expanded the shared party maximum to 12. Future minigames should reuse this party, recovery and score foundation. No TypeScript source or compilation workflow is used.
+
+The September 20 player-triggered floors, host-only starting, expanded round view and character updates are implemented. GitHub protects `main` with required pull requests and passing `validate` checks, and Render is configured to deploy it after CI passes. The first automated release is being verified; [verification](docs/verification.md) records the confirmed live revision and deployment evidence.
 
 ## Start locally
 
@@ -35,17 +37,25 @@ Always use the same origin, `http://127.0.0.1:2567`, for recovery. `localhost`, 
 1. Open http://127.0.0.1:2567 in **Chrome**. Enter a nickname and click **Create a party**.
 2. Copy the invitation link using the arrow next to the six-letter code. Open it in **Edge**, enter another nickname, and click **Join party**. Alternatively, open the main URL in Edge and enter the same code.
 3. Each browser is a distinct player. Both names and colors appear in the party list and arena. A second tab in the same browser profile is blocked while its first tab is open. Separate browser profiles also work.
-4. Click **Ready up** in both browsers. The current host clicks **Start round**. You can switch between the browser windows to control each character locally.
+4. With at least two connected players, the current host clicks **Start round**. There are no ready checks. The arena expands for the countdown and round; lobby menus return with results. You can switch between the browser windows to control each character locally.
 5. Move with **W A S D** or **arrow keys**. Click the arena first if the nickname field still has focus. Diagonal movement has the same speed. Switching away from the page clears held keys.
-6. Amber tiles flash and crack for **1.8 seconds**, then disappear. A character falls when its center reaches a missing tile. The arena boundary is solid. Eliminated and late-arriving players spectate.
-7. A lone survivor gets **3 points**. Simultaneous final falls or multiple survivors at the deadline tie for **1 point each**; earlier eliminated players and spectators get none. A round lasts up to **45 seconds**, and can end earlier.
-8. Both browsers receive the same result and cumulative score. The host clicks **Play again** to return everyone to the lobby. Ready up again to start another round.
+6. Every tile a living player stands on starts flashing amber for **1.8 seconds**, then disappears. The shrinking bar shows time remaining. Leaving or revisiting never resets its timer, and untouched tiles remain safe. A character falls when its center reaches a missing tile. The arena boundary is solid. Eliminated and late-arriving players spectate.
+7. A lone survivor gets **3 points**. Players who fall together in the final simulation step tie for **1 point each**; earlier eliminated players and spectators get none. There is no round deadline: keep moving until only one player remains or the last players fall together.
+8. Both browsers receive the same result and cumulative score. The host clicks **Play again** to return everyone to the lobby. The host can start the next round immediately once two players are connected.
 
-The floor shrinks toward a randomly placed pair of adjacent central squares. Both stay safe for 2.5 seconds, then the server randomly chooses one to warn for 1.8 seconds and remove. The last square stays safe to the deadline. Earlier waves do not reveal which of the pair survives. Players can still share the final island for a tie; there is no pushing or jumping.
+Your routes create the floor pattern. Starting tiles begin their timers when play begins, after the countdown. Every tile can fall, including the center; there is no random removal, protected final island or timed wave. Players can share tiles, but sharing never extends a timer. There is no pushing or jumping.
 
 On phones, use the thumb joystick: drag to move, release to stop. The **Touch controls** toggle also works on hybrid devices. Rotation, canceled gestures, loss of focus and reconnection clear input. Normal scrolling and zoom remain available outside the control. Use the hosted **HTTPS** invitation: plain HTTP on a LAN address does not supply the secure browser features used to guard duplicate tabs.
 
 The first player keeps host controls when others join. A refresh/drop/leave transfers those controls to a connected player; rejoining does not take them back. The current host is named in the party interface. This permission never changes simulation authority: positions, floor hazards and scoring are settled by the server.
+
+## Character artwork
+
+All players now use the supplied Universal LPC character sheet: four-direction walking, gentle idle animation and a fall animation. Colored ground markers and number badges distinguish players; your character keeps the white ring and YOU label. The original PNG is stored unchanged in `client/assets/character-spritesheet.png`. The renderer uses its 64×64 cells and anchors the feet to the authoritative position. Motion respects the browser’s reduced-motion setting, and refresh/reopen after elimination restores a fallen pose without replaying the fall. Sprite art does not change movement speed, collision or the center-point floor rule.
+
+The footer links the generator’s full contributor/asset credits and license information; [asset provenance and frame mapping](client/assets/README.md) records the source. The roughly 318 KiB sheet loads once after joining. The larger credits CSV downloads only when clicked.
+
+Music, effects and voice lines can be tied to movement, tile collapse, elimination, victory or round transitions. Phaser supports this, but audio remains disabled in the current game and no audio files were supplied with this update. A future audio pass should unlock playback after a click/tap, provide mute/volume controls, and play authoritative event sounds once without replaying them on recovery.
 
 ## Build and serve production
 
@@ -57,7 +67,17 @@ npm run start:prod
 
 Open `http://127.0.0.1:2567` for a local production check. The production entry binds `0.0.0.0` and reads `PORT`; it serves built assets and game endpoints without Vite or development controls. `npm start` still runs local development on loopback. Stop either with Ctrl+C.
 
-One Free Render service is configured in [render.yaml](render.yaml). Read [deployment commands, $0 conditions and service operations](docs/deployment.md) before deploying. Current public URL/revision and actual acceptance results belong in [verification](docs/verification.md). The [phone/family playtest guide](docs/playtest.md) is ready to use after deployment.
+One Free Render service is described in [render.yaml](render.yaml). Its connected GitHub source, `main` branch and **After CI Checks Pass** setting were verified in Render on September 20. It was created through the dashboard, so changing this YAML alone does not update it. Read [deployment setup, $0 conditions and service operations](docs/deployment.md). Current public URL/revision and actual acceptance results belong in [verification](docs/verification.md).
+
+## Develop, test and release
+
+1. Work on `codex/test`, run the relevant local checks, then commit and push that branch. This runs GitHub CI without deploying the game.
+2. Open a pull request from `codex/test` into `main`. The protected main branch requires the **`validate`** check to pass before merging.
+3. Merge when the update is ready for players. The new `main` commit runs CI again; Render builds and deploys it automatically after all checks pass. Check the Render deployment result before treating the update as live.
+
+[CI](.github/workflows/ci.yml) checks JavaScript, rules/session recovery, twelve-player play, Chrome/Edge gameplay and sprites, then builds and tests the production app. It uses the pinned Node version, a standard free GitHub runner for this public repository, and no paid resources, persistent caches or artifact uploads. Phone emulation does not replace real-device testing.
+
+`codex/test` is a development branch with automated tests; it has no separate hosted game. Keep the single Free Render instance and its no-card safeguard. Merge releases between play sessions because deployments end in-memory parties and scores. After a release, merge the latest `origin/main` back into `codex/test` before the next change. See the [phone/family playtest guide](docs/playtest.md) for live checks.
 
 ## Refresh, disconnect, and rejoin
 
@@ -128,14 +148,14 @@ One Node process runs Colyseus and the Vite middleware on the same origin and po
 | Browser needs secure features | Use HTTPS and a current browser with Web Locks. An ordinary HTTP LAN URL is not equivalent to loopback testing. |
 | Browser tests cannot launch | Install desktop Chrome and Edge, or explicitly configure available Playwright browser channels. No browser download is needed on the verified machine. |
 
-Environment settings are optional: `PORT` (default 2567), `RECONNECT_SECONDS` (120, positive up to 600), `COUNTDOWN_MS` (3000), and `ROUND_DURATION_MS` (45000; positive values below 3000 are clamped to 3000). Configuration is trusted server-side only; a joining player cannot change it. No `.env` file is required or loaded automatically.
+Environment settings are optional: `PORT` (default 2567), `RECONNECT_SECONDS` (120, positive up to 600), and `COUNTDOWN_MS` (3000). Configuration is trusted server-side only; a joining player cannot change it. No `.env` file is required or loaded automatically.
 
-Source: [JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos), branch `main`, published with the owner's authorization. Layout and decisions are in [docs/architecture.md](docs/architecture.md); contributor instructions are in [AGENTS.md](AGENTS.md). The lockfile and original brief are preserved.
+Source: [JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos), with development on `codex/test` and releases on `main`, published with the owner's authorization. Layout and decisions are in [docs/architecture.md](docs/architecture.md); contributor instructions are in [AGENTS.md](AGENTS.md). The lockfile and original brief are preserved.
 
 The phase specification is [instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md](instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md); implementation evidence and pending human/device checks are in the verification record.
 
 ## Current boundaries
 
-This prototype has one minigame, keyboard/touch controls, placeholder art and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery, audio or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
+This prototype has one minigame, keyboard/touch controls, animated LPC characters and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery, audio or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
 
 The first hosted computer + real-phone playtest passed by owner report. Twelve-person play, network switching/background suspension, and a friend on another network remain pending. Automated twelve-client checks, browser emulation and owner-reported experience are recorded separately. Use [the playtest sheet](docs/playtest.md) for broader coverage.

@@ -4,12 +4,18 @@ test('built app: Chrome/Edge invitation, host stability, round, recovery, result
   const browsers = await Promise.all([chromium.launch({ channel: 'chrome' }), chromium.launch({ channel: 'msedge' })]);
   const errors = [];
   const socketProtocols = [];
+  const spriteResponses = new Map();
   try {
     const host = await browsers[0].newPage({ viewport: { width: 1360, height: 1000 } });
     const guest = await browsers[1].newPage();
     for (const page of [host, guest]) {
       page.on('pageerror', error => errors.push(error.message));
       page.on('websocket', socket => socketProtocols.push(new URL(socket.url()).protocol));
+      page.on('response', response => {
+        if (/\/assets\/character-spritesheet-[^/]+\.png$/.test(new URL(response.url()).pathname)) {
+          spriteResponses.set(page, response);
+        }
+      });
     }
     await host.goto(baseURL);
     await host.locator('#nickname').fill('Production Host');
@@ -35,8 +41,21 @@ test('built app: Chrome/Edge invitation, host stability, round, recovery, result
       await expect(page.locator('#simulate-drop')).toHaveCount(0);
       await expect(page.locator('#diagnostics')).toHaveCount(0);
       await expect(page.locator('#game-container canvas')).toBeVisible();
-      await page.locator('#ready-button').click();
+      await expect(page.locator('#ready-button')).toHaveCount(0);
+      await expect.poll(() => spriteResponses.has(page)).toBe(true);
+      const sprite = spriteResponses.get(page);
+      expect(sprite.status()).toBe(200);
+      expect(sprite.headers()['content-type']).toContain('image/png');
+      const png = await sprite.body();
+      expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([832, 3456]);
     }
+    const creditsUrl = new URL(await host.locator('#character-credits').getAttribute('href'), baseURL);
+    expect(creditsUrl.origin).toBe(new URL(baseURL).origin);
+    expect(creditsUrl.pathname).toMatch(/^\/assets\/character-credits-[^/]+\.csv$/);
+    const credits = await host.request.get(creditsUrl.href);
+    expect(credits.status()).toBe(200);
+    expect(await credits.text()).toContain('authors');
     await host.locator('#start-button').click();
     await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'playing');
     await host.locator('#game-container').click();

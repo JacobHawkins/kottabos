@@ -116,7 +116,7 @@ export class Controls {
     this.joystick.setAttribute('aria-disabled', String(!this.canMove()));
     this.hint.textContent = this.canMove() ? 'Drag to move. Release to stop.'
       : this.session.connection !== 'connected' ? 'Movement pauses while reconnecting.'
-        : this.session.state?.phase === 'lobby' ? 'Ready up to play. Drag here when the round starts.'
+        : this.session.state?.phase === 'lobby' ? 'The host starts the round. Drag here when play begins.'
           : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
   }
 

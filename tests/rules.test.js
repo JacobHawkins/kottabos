@@ -1,18 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ARENA, PLAYER_SPEED, TILE_GONE, TILE_SAFE, TILE_WARNING, TILE_WARNING_MS } from '../shared/constants.js';
+import { ARENA, PLAYER_SPEED, STEP_MS, TILE_GONE, TILE_SAFE, TILE_WARNING, TILE_WARNING_MS } from '../shared/constants.js';
 import { movePlayer, normalizeInput, tileIndexAt } from '../shared/movement.js';
-import { createRound, createTileSchedule, finishRound, updateRound } from '../server/minigames/stay-on-platform.js';
+import { createRound, finishRound, updateRound } from '../server/minigames/stay-on-platform.js';
 
 function fixture(count = 2) {
   return {
     tiles: [],
+    tileGoneAtMs: [],
     players: new Map(Array.from({ length: count }, (_, index) => [String(index), {
-      name: `Player ${index}`, connected: true, ready: true, score: 5,
+      name: `Player ${index}`, connected: true, score: 5,
       x: 0, y: 0, alive: false, participating: false,
     }])),
     roundElapsedMs: 0,
   };
+}
+
+function placeOnTile(player, tile) {
+  player.x = (tile % ARENA.columns + 0.5) * ARENA.tileSize;
+  player.y = (Math.floor(tile / ARENA.columns) + 0.5) * ARENA.tileSize;
+}
+
+function advance(state, round, durationMs, inputs = new Map()) {
+  let remaining = durationMs;
+  let outcome = null;
+  while (remaining > 0.000001 && !outcome) {
+    const dtMs = Math.min(STEP_MS, remaining);
+    outcome = updateRound(state, round, { dtMs, inputs });
+    remaining -= dtMs;
+  }
+  return outcome;
 }
 
 test('shared movement normalizes diagonal speed, ignores invalid input, and clamps edges', () => {
@@ -30,226 +47,199 @@ test('shared movement normalizes diagonal speed, ignores invalid input, and clam
   assert.equal(tileIndexAt({ x: NaN, y: 1 }), -1);
 });
 
-test('seeded hazards warn every disappearing tile and preserve the final island', () => {
-  const schedule = createTileSchedule('party:round-1');
-  assert.deepEqual(schedule, createTileSchedule('party:round-1'));
-  assert.notDeepEqual(schedule, createTileSchedule('party:round-2'));
-  assert.equal(new Set(schedule.map((event) => event.tile)).size, 48);
-  assert.ok(schedule.every((event) => Number.isInteger(event.tile) && event.tile >= 0 && event.tile < 49));
-  assert.equal(schedule[0].warningAt, 4_000);
-  assert.ok(schedule.every((event) => event.goneAt - event.warningAt >= TILE_WARNING_MS - 0.001));
-  assert.ok(schedule.every((event) => event.goneAt < 45_000));
-});
-
-function finalPair(schedule) {
-  const shrink = schedule.slice(0, -1);
-  const removed = new Set(shrink.map(({ tile }) => tile));
-  return Array.from({ length: ARENA.columns * ARENA.rows }, (_, tile) => tile)
-    .filter((tile) => !removed.has(tile));
-}
-
-function placeOnTile(player, tile) {
-  player.x = (tile % ARENA.columns + 0.5) * ARENA.tileSize;
-  player.y = (Math.floor(tile / ARENA.columns) + 0.5) * ARENA.tileSize;
-}
-
-for (const durationMs of [45_000, 20_000]) {
-  test(`${durationMs / 1000}-second rounds show two safe final tiles before a separate fully warned removal`, () => {
-    const state = fixture();
-    const round = createRound(state, { seed: 'final-pair-timing', durationMs });
-    const schedule = round.schedule;
-    const final = schedule.at(-1);
-    const pair = finalPair(schedule);
-    const survivor = pair.find((tile) => tile !== final.tile);
-    const pairReachedAt = Math.max(...schedule.slice(0, -1).map(({ goneAt }) => goneAt));
-    assert.equal(schedule.length, 48);
-    assert.equal(pair.length, 2);
-    assert.ok(neighbors(pair[0]).includes(pair[1]), 'the final two tiles share a walkable edge');
-    assert.ok(pair.includes(final.tile));
-    assert.equal(schedule[0].warningAt, 4_000);
-    assert.ok(schedule.every(({ warningAt, goneAt }) => Number.isFinite(warningAt) &&
-      Number.isFinite(goneAt) && warningAt >= 0 && goneAt < durationMs));
-    assert.ok(schedule.every(({ warningAt }, index) => index === 0 || warningAt >= schedule[index - 1].warningAt));
-    assert.ok(final.warningAt - pairReachedAt >= 2_500, 'players can see and occupy both safe final tiles');
-    assert.equal(final.goneAt - final.warningAt, TILE_WARNING_MS);
-    assert.ok(durationMs - final.goneAt >= 2_500, 'the surviving tile remains until the deadline');
-
-    placeOnTile(state.players.get('0'), final.tile);
-    placeOnTile(state.players.get('1'), survivor);
-    assert.equal(updateRound(state, round, { dtMs: pairReachedAt }), null);
-    assert.deepEqual(state.tiles.map((value, tile) => value === TILE_SAFE ? tile : -1)
-      .filter((tile) => tile >= 0), pair);
-    assert.equal(state.tiles.filter((tile) => tile === TILE_GONE).length, 47);
-    assert.equal(updateRound(state, round, { dtMs: final.warningAt - pairReachedAt - 1 }), null);
-    assert.ok(pair.every((tile) => state.tiles[tile] === TILE_SAFE));
-    assert.equal(updateRound(state, round, { dtMs: 1 }), null);
-    assert.equal(state.tiles[final.tile], TILE_WARNING);
-    assert.equal(state.tiles[survivor], TILE_SAFE);
-    assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS - 1 }), null);
-    assert.ok([...state.players.values()].every((player) => player.alive));
-    const outcome = updateRound(state, round, { dtMs: 1 });
-    assert.equal(state.tiles[final.tile], TILE_GONE);
-    assert.equal(state.tiles[survivor], TILE_SAFE);
-    assert.equal(outcome.reason, 'last-survivor');
-    assert.deepEqual(outcome.pointsByPlayer, { 1: 3 });
-  });
-}
-
-test('three-second test rounds retain both final tiles rather than abbreviating the finale warning', () => {
-  const state = fixture();
-  const round = createRound(state, { seed: 'short-final-pair', durationMs: 3_000 });
-  assert.equal(round.schedule.length, 47);
-  const removed = new Set(round.schedule.map(({ tile }) => tile));
-  const pair = Array.from({ length: 49 }, (_, tile) => tile).filter((tile) => !removed.has(tile));
-  assert.equal(removed.size, 47);
-  assert.equal(pair.length, 2);
-  assert.ok(neighbors(pair[0]).includes(pair[1]));
-  assert.ok(round.schedule.every(({ warningAt, goneAt }) => warningAt >= 0 &&
-    goneAt - warningAt === TILE_WARNING_MS && goneAt < round.durationMs));
-  placeOnTile(state.players.get('0'), pair[0]);
-  placeOnTile(state.players.get('1'), pair[1]);
-  const outcome = updateRound(state, round, { dtMs: 5_000 });
-  assert.equal(state.roundElapsedMs, 3_000);
-  assert.ok(pair.every((tile) => state.tiles[tile] === TILE_SAFE));
-  assert.equal(state.tiles.filter((tile) => tile === TILE_GONE).length, 47);
-  assert.equal(outcome.reason, 'deadline');
-  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
-
-  const stationaryState = fixture();
-  const stationaryRound = createRound(stationaryState, { seed: 'short-final-pair', durationMs: 3_000 });
-  const stationaryOutcome = updateRound(stationaryState, stationaryRound, { dtMs: 3_000 });
-  assert.equal(stationaryOutcome.reason, 'simultaneous-elimination');
-  assert.deepEqual(stationaryOutcome.pointsByPlayer, { 0: 1, 1: 1 });
-  assert.ok([...stationaryState.players.values()].every((player) => !player.alive));
-});
-
-function neighbors(tile) {
-  const column = tile % ARENA.columns;
-  const row = Math.floor(tile / ARENA.columns);
-  return [
-    column > 0 ? tile - 1 : -1,
-    column < ARENA.columns - 1 ? tile + 1 : -1,
-    row > 0 ? tile - ARENA.columns : -1,
-    row < ARENA.rows - 1 ? tile + ARENA.columns : -1,
-  ].filter((index) => index >= 0);
-}
-
-test('varied final pairs retain connected floor and either endpoint can survive', () => {
-  const tileCount = ARENA.columns * ARENA.rows;
-  const islands = new Set();
-  const pairOutcomes = new Map();
-  const pairPatterns = new Map();
-  for (let seed = 0; seed < 200; seed += 1) {
-    const schedule = createTileSchedule(`variety:${seed}`);
-    const pair = finalPair(schedule);
-    const pairKey = pair.join(',');
-    const survivor = pair.find((tile) => tile !== schedule.at(-1).tile);
-    assert.equal(pair.length, 2);
-    assert.ok(neighbors(pair[0]).includes(pair[1]));
-    if (!pairOutcomes.has(pairKey)) pairOutcomes.set(pairKey, new Set());
-    pairOutcomes.get(pairKey).add(survivor);
-    if (!pairPatterns.has(pairKey)) pairPatterns.set(pairKey, new Set());
-    pairPatterns.get(pairKey).add(schedule.slice(0, -1).map(({ tile }) => tile).join(','));
-    const remaining = new Set(Array.from({ length: tileCount }, (_, index) => index));
-    const waves = Map.groupBy(schedule, (event) => event.goneAt);
-    for (const wave of waves.values()) {
-      for (const { tile } of wave) remaining.delete(tile);
-      const visited = new Set();
-      const frontier = [remaining.values().next().value];
-      for (const tile of frontier) {
-        if (visited.has(tile)) continue;
-        visited.add(tile);
-        frontier.push(...neighbors(tile).filter((next) => remaining.has(next) && !visited.has(next)));
-      }
-      assert.equal(visited.size, remaining.size, `seed ${seed} retains one connected island`);
-
-      // Start at any point in a warned tile, then follow orthogonal tile
-      // centers to a surviving tile. Include a whole tile of extra distance
-      // for that initial position, so a center-only path cannot hide a trap.
-      const availableBefore = new Set([...remaining, ...wave.map(({ tile }) => tile)]);
-      for (const { tile: warnedTile } of wave) {
-        const distances = new Map([[warnedTile, 0]]);
-        const escape = [warnedTile];
-        let steps;
-        for (const tile of escape) {
-          if (remaining.has(tile)) { steps = distances.get(tile); break; }
-          for (const next of neighbors(tile)) {
-            if (availableBefore.has(next) && !distances.has(next)) {
-              distances.set(next, distances.get(tile) + 1);
-              escape.push(next);
-            }
-          }
-        }
-        assert.ok((steps + 1) * ARENA.tileSize <= PLAYER_SPEED * TILE_WARNING_MS / 1000,
-          `seed ${seed} gives tile ${warnedTile} enough time to reach surviving floor`);
-      }
-    }
-    assert.equal(remaining.size, 1);
-    islands.add(remaining.values().next().value);
-  }
-  assert.equal(islands.size, 9, 'seeded rounds can end on each of the nine central destinations');
-  assert.ok(islands.has(24), 'the center remains one possible destination');
-  assert.equal(pairOutcomes.size, 12, 'rounds use all horizontal and vertical pairs within the central 3x3 area');
-  for (const [pair, outcomes] of pairOutcomes) {
-    assert.equal(outcomes.size, 2, `either tile in pair ${pair} can survive`);
-    assert.ok(pairPatterns.get(pair).size > 1, `pair ${pair} has varying earlier collapse patterns`);
-  }
-});
-
-test('players can escape the final warning onto its adjacent survivor and tie at the deadline', () => {
-  const state = fixture();
-  const round = createRound(state, { seed: 'walk-to-final-survivor' });
-  const final = round.schedule.at(-1);
-  const survivor = finalPair(round.schedule).find((tile) => tile !== final.tile);
-  const player = state.players.get('0');
-  placeOnTile(player, final.tile);
-  placeOnTile(state.players.get('1'), survivor);
-  assert.equal(updateRound(state, round, { dtMs: final.warningAt }), null);
-  const destination = state.players.get('1');
-  const direction = { x: Math.sign(destination.x - player.x), y: Math.sign(destination.y - player.y) };
-  const crossingMs = ARENA.tileSize / PLAYER_SPEED * 1000;
-  assert.equal(updateRound(state, round, { dtMs: crossingMs, inputs: new Map([['0', direction]]) }), null);
-  assert.equal(tileIndexAt(player), survivor);
-  assert.equal(updateRound(state, round, { dtMs: final.goneAt - round.elapsedMs }), null);
-  assert.ok([...state.players.values()].every((entry) => entry.alive));
-  const outcome = updateRound(state, round, { dtMs: round.durationMs });
-  assert.equal(state.roundElapsedMs, round.durationMs);
-  assert.equal(outcome.reason, 'deadline');
-  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
-  assert.equal(updateRound(state, round, { dtMs: 1_000 }), outcome);
-  assert.equal(finishRound(state, round), outcome);
-});
-
-test('players sharing the removed final tile fall together and tie without scoring twice', () => {
-  const state = fixture();
-  const round = createRound(state, { seed: 'shared-final-fall' });
-  const final = round.schedule.at(-1);
-  for (const player of state.players.values()) placeOnTile(player, final.tile);
-  assert.equal(updateRound(state, round, { dtMs: final.goneAt - 1 }), null);
-  const outcome = updateRound(state, round, { dtMs: 1 });
-  assert.equal(outcome.reason, 'simultaneous-elimination');
-  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
-  assert.ok([...state.players.values()].every((player) => !player.alive && player.score === 5));
-  assert.equal(updateRound(state, round, { dtMs: round.durationMs }), outcome);
-  assert.equal(finishRound(state, round), outcome);
-});
-
-test('countdown captures connected participants; reset preserves scores and clears floor', () => {
+test('countdown captures connected participants and resets floor timers without starting them or changing scores', () => {
   const state = fixture(3);
   state.players.get('2').connected = false;
   state.tiles = Array(49).fill(TILE_GONE);
-  const round = createRound(state, { seed: 7 });
+  state.tileGoneAtMs = Array(49).fill(1234);
+  const round = createRound(state);
   assert.deepEqual(round.participantIds, ['0', '1']);
   assert.ok(state.tiles.every((tile) => tile === TILE_SAFE));
+  assert.ok(state.tileGoneAtMs.every((deadline) => deadline === 0));
+  assert.equal(state.roundElapsedMs, 0);
   assert.equal(state.players.get('0').alive, true);
   assert.equal(state.players.get('0').score, 5);
   assert.equal(state.players.get('2').participating, false);
   assert.equal(state.players.get('2').alive, false);
 });
 
+test('the first playing step warns spawn tiles before movement and starts each entered tile independently', () => {
+  const state = fixture();
+  const round = createRound(state);
+  const player = state.players.get('0');
+  player.x = 127;
+  const startTile = tileIndexAt(player);
+  assert.equal(updateRound(state, round, { dtMs: STEP_MS, inputs: new Map([['0', { x: 1, y: 0 }]]) }), null);
+  const enteredTile = tileIndexAt(player);
+  assert.notEqual(startTile, enteredTile);
+  assert.equal(state.tiles[startTile], TILE_WARNING);
+  assert.equal(state.tileGoneAtMs[startTile], TILE_WARNING_MS);
+  assert.equal(state.tiles[enteredTile], TILE_WARNING);
+  assert.equal(state.tileGoneAtMs[enteredTile], TILE_WARNING_MS + STEP_MS);
+  assert.equal(state.tileGoneAtMs[tileIndexAt(state.players.get('1'))], TILE_WARNING_MS);
+  assert.equal(state.tiles.filter((tile) => tile === TILE_WARNING).length, 3);
+  assert.equal(state.tiles[24], TILE_SAFE, 'untouched central floor has no special schedule');
+  assert.equal(state.tileGoneAtMs[24], 0);
+});
+
+test('leaving, revisiting and sharing a warning tile never reset its countdown', () => {
+  const state = fixture();
+  const round = createRound(state);
+  const player = state.players.get('0');
+  const originalTile = tileIndexAt(player);
+  const tileTravelMs = ARENA.tileSize / PLAYER_SPEED * 1000;
+  assert.equal(advance(state, round, tileTravelMs, new Map([['0', { x: 1, y: 0 }]])), null);
+  const nextTile = tileIndexAt(player);
+  const nextDeadline = state.tileGoneAtMs[nextTile];
+  assert.notEqual(nextTile, originalTile);
+  assert.ok(nextDeadline > TILE_WARNING_MS);
+  assert.equal(advance(state, round, tileTravelMs, new Map([['0', { x: -1, y: 0 }]])), null);
+  assert.equal(tileIndexAt(player), originalTile);
+  assert.equal(state.tileGoneAtMs[originalTile], TILE_WARNING_MS);
+  assert.equal(state.tileGoneAtMs[nextTile], nextDeadline, 'the vacated tile keeps counting down');
+  placeOnTile(state.players.get('1'), originalTile);
+  assert.equal(updateRound(state, round, { dtMs: 100 }), null);
+  assert.equal(state.tileGoneAtMs[originalTile], TILE_WARNING_MS, 'a second player cannot extend it');
+  assert.equal(state.tileGoneAtMs[nextTile], nextDeadline);
+});
+
+test('warnings last the full interval, then stationary participants fall together exactly at disappearance', () => {
+  const state = fixture();
+  const round = createRound(state);
+  const spawnTiles = [...state.players.values()].map(tileIndexAt);
+  assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS - 1 }), null);
+  assert.ok(spawnTiles.every((tile) => state.tiles[tile] === TILE_WARNING));
+  assert.ok([...state.players.values()].every((player) => player.alive));
+  const outcome = updateRound(state, round, { dtMs: 1 });
+  assert.ok(spawnTiles.every((tile) => state.tiles[tile] === TILE_GONE));
+  assert.equal(state.tiles.filter((tile) => tile === TILE_GONE).length, 2);
+  assert.equal(outcome.reason, 'simultaneous-elimination');
+  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
+  assert.equal(outcome.resultText, 'Player 0 & Player 1 tie! +1 point each');
+  assert.ok([...state.players.values()].every((player) => !player.alive && player.score === 5));
+  assert.equal(updateRound(state, round, { dtMs: 10_000 }), outcome);
+  assert.equal(finishRound(state, round), outcome);
+  assert.equal(state.roundElapsedMs, TILE_WARNING_MS, 'a settled round no longer advances');
+});
+
+test('moving off on the disappearance step escapes and leaves the vacated tile permanently gone', () => {
+  const state = fixture();
+  const round = createRound(state);
+  const player = state.players.get('1');
+  player.x = 383;
+  const oldTile = tileIndexAt(player);
+  assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS - STEP_MS }), null);
+  const outcome = updateRound(state, round, { dtMs: STEP_MS, inputs: new Map([['1', { x: 1, y: 0 }]]) });
+  assert.equal(state.tiles[oldTile], TILE_GONE);
+  assert.notEqual(tileIndexAt(player), oldTile);
+  assert.equal(player.alive, true);
+  assert.equal(state.tileGoneAtMs[tileIndexAt(player)], TILE_WARNING_MS * 2);
+  assert.equal(outcome.reason, 'last-survivor');
+  assert.deepEqual(outcome.winnerIds, ['1']);
+  assert.deepEqual(outcome.pointsByPlayer, { 1: 3 });
+});
+
+test('walking onto an already missing tile eliminates without reviving the floor', () => {
+  const state = fixture(3);
+  const round = createRound(state);
+  const player = state.players.get('0');
+  const missingTile = tileIndexAt(player) + 1;
+  state.tiles[missingTile] = TILE_GONE;
+  player.x = 127;
+  assert.equal(updateRound(state, round, { dtMs: STEP_MS, inputs: new Map([['0', { x: 1, y: 0 }]]) }), null);
+  assert.equal(tileIndexAt(player), missingTile);
+  assert.equal(player.alive, false);
+  assert.equal(state.tiles[missingTile], TILE_GONE);
+  assert.equal(state.tileGoneAtMs[missingTile], 0);
+});
+
+test('every arena tile can be triggered and fall, including the center and boundary tiles', () => {
+  for (let tile = 0; tile < ARENA.columns * ARENA.rows; tile += 1) {
+    const state = fixture();
+    const round = createRound(state);
+    for (const player of state.players.values()) placeOnTile(player, tile);
+    assert.equal(updateRound(state, round, { dtMs: 1 }), null);
+    assert.equal(state.tiles[tile], TILE_WARNING, `tile ${tile} warns when occupied`);
+    const outcome = updateRound(state, round, { dtMs: TILE_WARNING_MS - 1 });
+    assert.equal(state.tiles[tile], TILE_GONE, `tile ${tile} can disappear`);
+    assert.equal(outcome.reason, 'simultaneous-elimination');
+    assert.equal(state.tiles.filter((value) => value === TILE_GONE).length, 1);
+  }
+});
+
+test('player-driven paths continue beyond the old deadline and untouched floor stays safe', () => {
+  const state = fixture();
+  const round = createRound(state);
+  for (const player of state.players.values()) placeOnTile(player, 0);
+  const route = Array.from({ length: ARENA.rows }, (_, row) =>
+    Array.from({ length: ARENA.columns }, (_, column) => row * ARENA.columns +
+      (row % 2 ? ARENA.columns - column - 1 : column))).flat();
+  for (const next of route.slice(1, 31)) {
+    assert.equal(advance(state, round, 1200), null);
+    const player = state.players.get('0');
+    const x = (next % ARENA.columns + 0.5) * ARENA.tileSize;
+    const y = (Math.floor(next / ARENA.columns) + 0.5) * ARENA.tileSize;
+    const direction = {
+      x: Math.abs(x - player.x) < 0.001 ? 0 : Math.sign(x - player.x),
+      y: Math.abs(y - player.y) < 0.001 ? 0 : Math.sign(y - player.y),
+    };
+    const inputs = new Map([...state.players.keys()].map((id) => [id, direction]));
+    assert.equal(advance(state, round, ARENA.tileSize / PLAYER_SPEED * 1000, inputs), null);
+    assert.equal(tileIndexAt(player), next);
+  }
+  assert.ok(state.roundElapsedMs > 45_000);
+  assert.ok([...state.players.values()].every((player) => player.alive));
+  assert.equal(round.outcome, null);
+  assert.equal(state.tiles[48], TILE_SAFE);
+  assert.equal(state.tileGoneAtMs[48], 0);
+  assert.ok(state.tiles.filter((tile) => tile === TILE_GONE).length > 25, 'old footprints continue falling');
+});
+
+test('eliminated players and late spectators cannot move or start floor countdowns', () => {
+  const state = fixture(3);
+  const round = createRound(state);
+  const eliminated = state.players.get('2');
+  eliminated.alive = false;
+  placeOnTile(eliminated, 24);
+  state.players.set('late', { name: 'Late', connected: true, participating: false, alive: false, x: 32, y: 32 });
+  assert.equal(updateRound(state, round, { dtMs: 100, inputs: new Map([
+    ['2', { x: 1, y: 0 }], ['late', { x: 1, y: 0 }],
+  ]) }), null);
+  assert.equal(state.tiles[24], TILE_SAFE);
+  assert.equal(state.tileGoneAtMs[24], 0);
+  assert.equal(state.tiles[0], TILE_SAFE);
+  assert.equal(eliminated.x, 224);
+  assert.equal(state.players.get('late').x, 32);
+  const outcome = updateRound(state, round, { dtMs: TILE_WARNING_MS });
+  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
+});
+
+test('disconnected participants start timers, remain vulnerable, and cannot revive on rejoin', () => {
+  const state = fixture(3);
+  const round = createRound(state);
+  const player = state.players.get('0');
+  player.connected = false;
+  assert.equal(updateRound(state, round, { dtMs: 1, inputs: new Map([['0', { x: 1, y: 0 }]]) }), null);
+  assert.equal(player.x, 96);
+  assert.equal(state.tiles[8], TILE_WARNING);
+  assert.equal(state.tileGoneAtMs[8], TILE_WARNING_MS);
+  // Let connected opponents move to later-started tiles before this player falls.
+  assert.equal(advance(state, round, 500, new Map([
+    ['1', { x: -1, y: 0 }], ['2', { x: -1, y: 0 }],
+  ])), null);
+  assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS - round.elapsedMs }), null);
+  assert.equal(player.alive, false);
+  assert.equal(player.x, 96);
+  player.connected = true;
+  const position = { x: player.x, y: player.y };
+  assert.equal(updateRound(state, round, { dtMs: STEP_MS, inputs: new Map([['0', { x: 1, y: 0 }]]) }), null);
+  assert.equal(player.alive, false);
+  assert.deepEqual({ x: player.x, y: player.y }, position);
+});
+
 test('twelve participants start on distinct, separated safe tiles around a symmetric inset perimeter', () => {
   const state = fixture(12);
-  const round = createRound(state, { seed: 'full-party-spawns' });
+  const round = createRound(state);
   const players = [...state.players.values()];
   assert.equal(round.participantIds.length, 12);
   assert.equal(new Set(players.map(tileIndexAt)).size, 12);
@@ -261,9 +251,6 @@ test('twelve participants start on distinct, separated safe tiles around a symme
     assert.ok(player.x >= ARENA.tileSize && player.x <= ARENA.width - ARENA.tileSize);
     assert.ok(player.y >= ARENA.tileSize && player.y <= ARENA.height - ARENA.tileSize);
     assert.ok(positions.has(`${ARENA.width - player.y},${player.x}`), 'the layout has quarter-turn symmetry');
-    const column = Math.floor(player.x / ARENA.tileSize);
-    const row = Math.floor(player.y / ARENA.tileSize);
-    assert.ok(column < 2 || column > 4 || row < 2 || row > 4, 'no player starts on a potential final square');
   }
   for (let first = 0; first < players.length; first += 1) {
     for (let second = first + 1; second < players.length; second += 1) {
@@ -273,128 +260,52 @@ test('twelve participants start on distinct, separated safe tiles around a symme
   }
 });
 
-test('all twelve players move authoritatively and eleven falls produce one cached winner', () => {
+test('all twelve players move at the authoritative bounded speed', () => {
   const state = fixture(12);
-  const round = createRound(state, { seed: 'full-party-movement' });
-  round.schedule = [];
+  const round = createRound(state);
   const before = new Map([...state.players].map(([id, player]) => [id, { x: player.x, y: player.y }]));
   const inputs = new Map([...state.players].map(([id, player]) => [id, {
     x: Math.sign(ARENA.width / 2 - player.x), y: Math.sign(ARENA.height / 2 - player.y),
   }]));
-  assert.equal(updateRound(state, round, { dtMs: 100, inputs }), null);
+  assert.equal(updateRound(state, round, { dtMs: STEP_MS, inputs }), null);
   for (const [id, player] of state.players) {
     const start = before.get(id);
-    assert.ok(Math.abs(Math.hypot(player.x - start.x, player.y - start.y) - PLAYER_SPEED / 10) < 0.00001,
+    assert.ok(Math.abs(Math.hypot(player.x - start.x, player.y - start.y) - PLAYER_SPEED * STEP_MS / 1000) < 0.00001,
       `${id} moves at the same bounded speed`);
+    assert.equal(state.tileGoneAtMs[tileIndexAt(start)], TILE_WARNING_MS);
   }
-  round.schedule = [...state.players].filter(([id]) => id !== '11')
-    .map(([, player]) => ({ tile: tileIndexAt(player), warningAt: 100, goneAt: 1_900 }));
-  assert.equal(updateRound(state, round, { dtMs: 1_799 }), null);
-  assert.ok([...state.players.values()].every((player) => player.alive));
-  const outcome = updateRound(state, round, { dtMs: 1 });
-  assert.deepEqual(outcome.winnerIds, ['11']);
-  assert.deepEqual(outcome.pointsByPlayer, { 11: 3 });
-  assert.equal(outcome.reason, 'last-survivor');
-  assert.deepEqual([...state.players].filter(([, player]) => player.alive).map(([id]) => id), ['11']);
-  assert.equal(updateRound(state, round, { dtMs: 45_000 }), outcome);
-  assert.equal(finishRound(state, round), outcome);
-  assert.ok([...state.players.values()].every((player) => player.score === 5), 'only the party layer awards cumulative points');
 });
 
-test('a twelve-way deadline tie awards each participant once in the cached outcome', () => {
+test('a twelve-way final fall ties once without choosing a winner by iteration order', () => {
   const state = fixture(12);
-  const round = createRound(state, { seed: 'full-party-tie' });
-  round.schedule = [];
-  const outcome = updateRound(state, round, { dtMs: round.durationMs });
-  assert.equal(outcome.reason, 'deadline');
+  const round = createRound(state);
+  const outcome = updateRound(state, round, { dtMs: TILE_WARNING_MS });
+  assert.equal(outcome.reason, 'simultaneous-elimination');
   assert.equal(outcome.resultText, '12 players tie! +1 point each');
   assert.deepEqual(outcome.winnerIds, [...state.players.keys()]);
   assert.deepEqual(outcome.pointsByPlayer, Object.fromEntries([...state.players.keys()].map((id) => [id, 1])));
-  assert.equal(updateRound(state, round, { dtMs: round.durationMs }), outcome);
+  assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS }), outcome);
   assert.equal(finishRound(state, round), outcome);
+  assert.ok([...state.players.values()].every((player) => player.score === 5), 'party owns cumulative scores');
 });
 
-test('warnings do not eliminate until the exact disappearance step', () => {
+test('permanent removal settles an existing sole survivor before their tile falls', () => {
   const state = fixture();
   const round = createRound(state);
-  round.schedule = [{ tile: 8, warningAt: 100, goneAt: 1900 }];
-  assert.equal(updateRound(state, round, { dtMs: 100 }), null);
-  assert.equal(state.tiles[8], TILE_WARNING);
-  assert.equal(state.players.get('0').alive, true);
-  assert.equal(updateRound(state, round, { dtMs: 1799 }), null);
-  const outcome = updateRound(state, round, { dtMs: 1 });
-  assert.equal(state.players.get('0').alive, false);
-  assert.equal(state.tiles[8], TILE_GONE);
-  assert.deepEqual(outcome.winnerIds, ['1']);
-  assert.deepEqual(outcome.pointsByPlayer, { 1: 3 });
-});
-
-test('simultaneous final falls tie at one point each; finishing cannot award twice', () => {
-  const state = fixture();
-  const round = createRound(state);
-  round.schedule = [8, 40].map((tile) => ({ tile, warningAt: 0, goneAt: 100 }));
-  const outcome = updateRound(state, round, { dtMs: 100 });
-  assert.deepEqual(outcome.winnerIds, ['0', '1']);
-  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
-  assert.equal(outcome.reason, 'simultaneous-elimination');
-  assert.equal(updateRound(state, round, { dtMs: 1000 }), outcome);
-  assert.equal(finishRound(state, round), outcome);
-  assert.equal(state.players.get('0').score, 5, 'party owns cumulative scoring');
-});
-
-test('deadline survivors tie and late spectators never earn points', () => {
-  const state = fixture();
-  const round = createRound(state, { durationMs: 3000 });
-  round.schedule = [];
-  state.players.set('late', { name: 'Late', connected: true, participating: false, alive: false });
-  const outcome = updateRound(state, round, { dtMs: 5000 });
-  assert.equal(state.roundElapsedMs, 3000);
-  assert.equal(outcome.reason, 'deadline');
-  assert.deepEqual(outcome.pointsByPlayer, { 0: 1, 1: 1 });
-  assert.equal(outcome.resultText, 'Player 0 & Player 1 tie! +1 point each');
-});
-
-test('disconnected players stop moving, remain vulnerable, and cannot revive on rejoin', () => {
-  const state = fixture(3);
-  const round = createRound(state);
-  const player = state.players.get('0');
-  player.connected = false;
-  round.schedule = [{ tile: 8, warningAt: 0, goneAt: 100 }];
-  assert.equal(updateRound(state, round, { dtMs: 100, inputs: new Map([['0', { x: 1, y: 0 }]]) }), null);
-  assert.equal(player.x, 96);
-  assert.equal(player.alive, false);
-  player.connected = true;
-  updateRound(state, round, { dtMs: 100, inputs: new Map([['0', { x: 1, y: 0 }]]) });
-  assert.equal(player.alive, false);
-  assert.equal(player.x, 96);
-});
-
-test('a permanent leave cannot prevent the remaining player winning', () => {
-  const state = fixture();
-  const round = createRound(state);
+  assert.equal(updateRound(state, round, { dtMs: TILE_WARNING_MS - 1 }), null);
   state.players.delete('0');
-  const outcome = updateRound(state, round, { dtMs: 1000 / 30 });
-  assert.deepEqual(outcome.winnerIds, ['1']);
-  assert.deepEqual(outcome.pointsByPlayer, { 1: 3 });
-});
-
-test('permanent removal settles an existing sole survivor before the next hazard', () => {
-  const state = fixture();
-  const round = createRound(state);
-  state.players.delete('0');
-  round.schedule = [{ tile: 40, warningAt: 0, goneAt: 1000 / 30 }];
-  const outcome = updateRound(state, round, { dtMs: 1000 / 30 });
+  const outcome = updateRound(state, round, { dtMs: STEP_MS });
   assert.equal(outcome.reason, 'last-survivor');
   assert.deepEqual(outcome.pointsByPlayer, { 1: 3 });
   assert.equal(state.players.get('1').alive, true);
-  assert.equal(state.roundElapsedMs, 0, 'round stops before an unnecessary simulation step');
+  assert.equal(state.roundElapsedMs, TILE_WARNING_MS - 1, 'round stops before an unnecessary simulation step');
 });
 
 test('removing every participant ends a round without awarding points', () => {
   const state = fixture();
   const round = createRound(state);
   state.players.clear();
-  const outcome = updateRound(state, round, { dtMs: 1000 / 30 });
+  const outcome = updateRound(state, round, { dtMs: STEP_MS });
   assert.equal(outcome.reason, 'no-participants');
   assert.deepEqual(outcome.winnerIds, []);
   assert.deepEqual(outcome.pointsByPlayer, {});

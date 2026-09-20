@@ -9,7 +9,6 @@ const server = await createAppServer({
   host: '127.0.0.1',
   reconnectionSeconds: Number(process.env.RECONNECT_SECONDS || 120),
   countdownMs: Number(process.env.COUNTDOWN_MS || 3000),
-  roundDurationMs: Number(process.env.ROUND_DURATION_MS || 45000),
 });
 // One origin/port and no upgrade-handler competition with Colyseus. Refresh the
 // page after client edits; restart npm start after server/shared rule edits.

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../server/app.js';
-import { MAX_PLAYERS, STEP_MS, PLAYER_SPEED } from '../shared/constants.js';
+import { MAX_PLAYERS, STEP_MS, PLAYER_SPEED, TILE_SAFE, TILE_WARNING } from '../shared/constants.js';
+import { tileIndexAt } from '../shared/movement.js';
 
 async function until(predicate, message, timeout = 3000) {
   const deadline = Date.now() + timeout;
@@ -34,7 +35,7 @@ async function drop(room, serverRoom, id) {
 // Serial because the Colyseus matchmaker is process-global; the protocol clients
 // below are independent real WebSocket sessions, not room method mocks.
 test('party lifecycle and recovery over real HTTP/WebSocket connections', { timeout: 30_000 }, async (t) => {
-  let server = await createAppServer({ port: 0, reconnectionSeconds: 0.7, countdownMs: 100, roundDurationMs: 3500, log: false });
+  let server = await createAppServer({ port: 0, reconnectionSeconds: 3, countdownMs: 100, log: false });
   await server.listen();
   let endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
   let client = new Client(endpoint);
@@ -90,7 +91,7 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     await until(() => server.rooms.size === 1, 'leaving frees pilot room capacity');
   });
 
-  await t.test('later joins keep the creator host; guests cannot start even when everyone is ready', async () => {
+  await t.test('later joins keep the creator host; guests cannot start', async () => {
     const third = track(await client.joinById(first.roomId, { name: 'Cedar' }));
     await until(() => third.state.players?.size === 3 && first.state.players?.size === 3, 'third player arrives');
     assert.equal(authoritative.state.hostId, firstId);
@@ -98,14 +99,13 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     await until(() => [first, second, third, fourth].every((room) => room.state.players?.size === 4), 'four clients see the roster');
     for (const room of [first, second, third, fourth]) {
       assert.equal(room.state.hostId, firstId, 'every client agrees the creator keeps host controls');
-      room.send('ready', true);
+      assert.equal(room.state.players.get(firstId).ready, undefined, 'readiness is absent from synchronized players');
     }
-    await until(() => Array.from(authoritative.state.players.values()).every((player) => player.ready), 'all four players ready');
     fourth.send('start');
     third.send('start');
     second.send('start');
     await delay(100);
-    assert.equal(authoritative.state.phase, 'lobby', 'ready guests have no start permission');
+    assert.equal(authoritative.state.phase, 'lobby', 'guests have no start permission');
     await fourth.leave();
     await third.leave();
     await until(() => authoritative.state.players.size === 2, 'temporary players release their seats');
@@ -116,6 +116,11 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     for (let retry = 0; retry < 3; retry += 1) {
       const token = await drop(first, authoritative, firstId);
       assert.equal(authoritative.state.hostId, secondId);
+      if (retry === 0) {
+        second.send('start');
+        await delay(100);
+        assert.equal(authoritative.state.phase, 'lobby', 'reserved seats do not satisfy the two connected player minimum');
+      }
       first = track(await new Client(endpoint).reconnect(token));
       await until(() => first.state.players?.get(firstId)?.connected, 'reload receives authoritative identity');
       assert.equal(authoritative.state.players.size, 2);
@@ -131,14 +136,12 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     await assert.rejects(new Client(endpoint).reconnect(first.reconnectionToken));
     assert.equal(authoritative.state.players.size, 2);
     assert.equal(authoritative.state.players.get(firstId).connected, true);
-    first.send('ready', true);
-    second.send('ready', true);
-    await until(() => Array.from(authoritative.state.players.values()).every((player) => player.ready), 'ready once per participant');
   });
 
   await t.test('fixed-step inputs cannot move twice for duplicate sequence or unbounded commands', async () => {
     second.send('start');
     await until(() => authoritative.state.phase === 'playing', 'countdown starts a round');
+    assert.equal(authoritative.state.phaseEndsAt, 0, 'playing has no global round deadline');
     const player = authoritative.state.players.get(firstId);
     const original = { x: player.x, y: player.y };
     first.send('input', { seq: 1, x: 1, y: 0 });
@@ -157,12 +160,19 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     first = track(await new Client(endpoint).reconnect(token));
     await until(() => first.state.phase === 'playing' && first.state.players?.get(firstId)?.connected, 'round reload receives playing state');
     assert.equal(first.state.players.get(firstId).alive, true);
-    // Position the authoritative player over a removed tile to exercise the
-    // regular hazard update while their socket is gone; no game rule bypass.
+    // The survivor walks off its spawn, while the dropped player stays on its
+    // naturally armed tile. No private hazard state is injected.
+    const survivor = authoritative.state.players.get(secondId);
+    const survivorSpawn = tileIndexAt(survivor);
+    for (let seq = 1; seq <= 8; seq += 1) {
+      second.send('input', { seq, x: -1, y: 0 });
+      await delay(STEP_MS);
+    }
+    await until(() => tileIndexAt(survivor) !== survivorSpawn, 'survivor moves onto another tile');
     token = await drop(first, authoritative, firstId);
     const player = authoritative.state.players.get(firstId);
-    const index = Math.floor(player.y / 64) * 7 + Math.floor(player.x / 64);
-    authoritative.roundGame.schedule = [{ tile: index, warningAt: 0, goneAt: 0 }];
+    const index = tileIndexAt(player);
+    assert.equal(authoritative.state.tiles[index], TILE_WARNING);
     await until(() => authoritative.state.phase === 'results', 'hazard produces results');
     first = track(await new Client(endpoint).reconnect(token));
     await until(() => first.state.phase === 'results' && second.state.phase === 'results', 'both clients agree results');
@@ -176,7 +186,8 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     second.send('replay');
     await until(() => first.state.phase === 'lobby', 'replay returns same party to lobby');
     assert.equal(first.state.players.get(secondId).score, score);
-    assert.equal(first.state.players.get(firstId).ready, false);
+    assert.ok([...first.state.tiles].every((tile) => tile === TILE_SAFE), 'replay restores every tile');
+    assert.ok([...first.state.tileGoneAtMs].every((deadline) => deadline === 0), 'replay clears activated tile timers');
   });
 
   await t.test('running SDK automatically reconnects without duplicate listener events', async () => {
@@ -201,7 +212,7 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     const droppedId = Array.from(authoritative.state.players.values()).find((player) => player.name === `Seat ${MAX_PLAYERS}`).id;
     const token = await drop(guests.pop(), authoritative, droppedId);
     await assert.rejects(client.joinById(first.roomId, { name: 'Elm' }));
-    await until(() => !authoritative.state.players.has(droppedId), 'reservation expires', 2000);
+    await until(() => !authoritative.state.players.has(droppedId), 'reservation expires', 4000);
     await assert.rejects(new Client(endpoint).reconnect(token));
     const replacement = track(await client.joinById(first.roomId, { name: 'Elm' }));
     await until(() => authoritative.state.players.size === MAX_PLAYERS, 'released seat can be joined');

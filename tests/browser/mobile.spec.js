@@ -3,6 +3,8 @@ import { chromium, expect, test } from '@playwright/test';
 // These are Chrome touch/viewport emulation checks, not Safari or physical-phone
 // certification. Assertions read the shipped UI and visible canvas pixels.
 async function characterPosition(page, name) {
+  // The shared LPC artwork sits on each player's unique opaque color marker.
+  // Tracking that marker works independently of which animation frame is shown.
   return page.evaluate((playerName) => {
     const row = [...document.querySelectorAll('.player-row')].find((element) => element.querySelector('.player-name').textContent.startsWith(playerName));
     const rgb = getComputedStyle(row.querySelector('.avatar')).backgroundColor.match(/\d+/g).slice(0, 3).map(Number);
@@ -24,7 +26,7 @@ async function noHorizontalOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 }
 
-test('phone portrait/landscape controls move, release outside, cancel, and preserve a shared round', async ({ baseURL }, testInfo) => {
+test('phone portrait/landscape controls move, release outside, cancel, and preserve shared rounds', async ({ baseURL }, testInfo) => {
   const browser = await chromium.launch({ channel: process.env.TEST_HOST_BROWSER || 'chrome' });
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const desktop = await browser.newContext({ viewport: { width: 1360, height: 900 } });
@@ -46,20 +48,39 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
     await expect(guest.locator('#touch-toggle')).toHaveAttribute('aria-pressed', 'false');
     await expect(host.locator('#start-button')).toBeVisible();
     await expect(guest.locator('#start-button')).toBeHidden();
-    await host.locator('#ready-button').tap();
-    await guest.locator('#ready-button').click();
-    await expect(host.locator('#start-button')).toBeEnabled();
-    await host.locator('#start-button').tap();
-    await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'playing');
-    await expect(host.locator('#joystick')).toHaveAttribute('aria-disabled', 'false');
-    await expect(host.locator('#game-container canvas')).toBeVisible();
-    await host.locator('#joystick').scrollIntoViewIfNeeded();
-    const bounds = await host.locator('#joystick').boundingBox();
-    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2, id: 1 };
-    const right = { ...center, x: center.x + 50 };
-    const second = { ...center, id: 2, x: center.x - 45 };
+    await expect(host.locator('#ready-button')).toHaveCount(0);
+    const startRound = async () => {
+      if (await host.locator('#results-panel').isVisible()) {
+        await host.locator('#replay-button').tap();
+        await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'lobby');
+      }
+      await expect(host.locator('#start-button')).toBeEnabled();
+      await host.locator('#start-button').tap();
+      await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'playing');
+      await expect(host.locator('body')).toHaveClass('is-playing');
+      await expect(host.locator('#joystick')).toHaveAttribute('aria-disabled', 'false');
+      await expect(host.locator('.party-sidebar')).toBeHidden();
+      await expect(host.locator('#leave-button')).toBeVisible();
+    };
+    const finishRound = async () => {
+      await expect(host.locator('#results-panel')).toBeVisible({ timeout: 6_000 });
+      await expect(guest.locator('#result-text')).toHaveText(await host.locator('#result-text').textContent());
+      await expect(host.locator('#joystick')).toHaveAttribute('aria-disabled', 'true');
+      await expect(host.locator('body')).not.toHaveClass('is-playing');
+      await expect(host.locator('.party-info')).toBeVisible();
+    };
+    const joystickPoints = async () => {
+      const bounds = await host.locator('#joystick').boundingBox();
+      const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2, id: 1 };
+      return { center, right: { ...center, x: center.x + 50 }, second: { ...center, id: 2, x: center.x - 45 } };
+    };
     const cdp = await phone.newCDPSession(host);
     const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+    // Each check uses a fresh host-started round. Idle players correctly lose
+    // their spawn tile after 1.8 seconds, so controls are exercised promptly.
+    await startRound();
+    let { center, right, second } = await joystickPoints();
+    await expect(host.locator('#game-container canvas')).toBeVisible();
     await expect.poll(() => characterPosition(host, 'Phone')).not.toBeNull();
     const before = await characterPosition(host, 'Phone');
     const scrollBefore = await host.evaluate(() => scrollY);
@@ -83,6 +104,12 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
     expect(Math.abs((await characterPosition(host, 'Phone')).x - stopped.x)).toBeLessThan(3);
     expect(await host.evaluate(() => scrollY)).toBe(scrollBefore);
     await touch('touchEnd', []);
+    // The other screen receives the same movement through the real server.
+    await expect.poll(async () => Math.abs((await characterPosition(guest, 'Phone'))?.x - stopped.x), { intervals: [30] }).toBeLessThan(6);
+    await finishRound();
+
+    await startRound();
+    ({ center, right, second } = await joystickPoints());
     await touch('touchStart', [right]);
     await host.waitForTimeout(100);
     await touch('touchCancel', []);
@@ -92,7 +119,6 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
     await host.waitForTimeout(180);
     expect(Math.abs((await characterPosition(host, 'Phone')).x - canceled.x)).toBeLessThan(3);
     await expect(host.locator('#touch-toggle')).toHaveAttribute('aria-pressed', 'true');
-    // The other screen receives the same movement through the real server.
     await expect.poll(async () => Math.abs((await characterPosition(guest, 'Phone'))?.x - canceled.x), { intervals: [50] }).toBeLessThan(6);
     const desktopBefore = await characterPosition(guest, 'Keyboard');
     await guest.locator('#game-container').focus();
@@ -100,8 +126,14 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
     await expect.poll(async () => desktopBefore.x - (await characterPosition(guest, 'Keyboard')).x, { intervals: [30] }).toBeGreaterThan(20);
     await guest.keyboard.up('ArrowLeft');
     await expect(host.locator('#touch-toggle')).toHaveAttribute('aria-pressed', 'true');
+    await finishRound();
+
+    await startRound();
     await noHorizontalOverflow(host);
     await host.screenshot({ path: testInfo.outputPath('phone-portrait.png'), fullPage: true });
+    ({ center, right, second } = await joystickPoints());
+    await touch('touchStart', [right]);
+    await expect(host.locator('#joystick')).not.toHaveCSS('--stick-x', '0px');
     await host.setViewportSize({ width: 844, height: 390 });
     await host.evaluate(() => scrollTo(0, 0));
     await noHorizontalOverflow(host);
@@ -111,10 +143,22 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
     expect(arena.y + arena.height).toBeLessThanOrEqual(391);
     expect(stick.y + stick.height).toBeLessThanOrEqual(391);
     expect(stick.x).toBeGreaterThan(arena.x + arena.width);
+    await touch('touchEnd', []);
     await host.screenshot({ path: testInfo.outputPath('phone-landscape.png'), fullPage: true });
-    await expect(host.locator('#results-panel')).toBeVisible({ timeout: 25_000 });
-    await expect(guest.locator('#result-text')).toHaveText(await host.locator('#result-text').textContent());
-    await expect(host.locator('#joystick')).toHaveAttribute('aria-disabled', 'true');
+    await finishRound();
+    await host.setViewportSize({ width: 320, height: 568 });
+    await startRound();
+    for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }]) {
+      await host.setViewportSize(viewport);
+      await noHorizontalOverflow(host);
+      for (const selector of ['.stage', '#joystick', '#leave-button']) {
+        const bounds = await host.locator(selector).boundingBox();
+        expect(bounds.y).toBeGreaterThanOrEqual(0);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height + 1);
+      }
+    }
+    await finishRound();
+    await host.setViewportSize({ width: 844, height: 390 });
     await host.locator('#replay-button').tap();
     await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'lobby');
     const identity = await host.locator('.player-row').filter({ hasText: 'Phone (you)' }).getAttribute('data-player-id');

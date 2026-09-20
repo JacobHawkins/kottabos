@@ -1,8 +1,10 @@
 import { PartySession, claimBrowserTab } from './session.js';
 import { Controls } from './controls.js';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../shared/constants.js';
+import characterCreditsUrl from './assets/character-credits.csv?url';
 
 const $ = (id) => document.getElementById(id);
+$('character-credits').href = characterCreditsUrl;
 $('player-count').textContent = `0 / ${MAX_PLAYERS}`;
 if (import.meta.env.DEV) {
   document.querySelector('.site-footer').insertAdjacentHTML('beforebegin', '<details id="diagnostics" hidden><summary>Local diagnostics <span id="diagnostic-summary"></span></summary><div class="diagnostic-content"><output id="diagnostic-values"></output><button id="simulate-drop" class="secondary">Test a 3-second connection drop</button><p>Development tools. Scores and floor hazards keep running while disconnected.</p></div></details>');
@@ -46,6 +48,8 @@ function reset() {
   $('home').hidden = false;
   $('party').hidden = true;
   $('results-panel').hidden = true;
+  $('leave-button').hidden = true;
+  document.body.classList.remove('is-playing');
   lastRoster = '';
 }
 
@@ -53,8 +57,8 @@ function renderRoster(state) {
   const players = Object.values(state.players);
   $('party').dataset.phase = state.phase;
   // Do not replace buttons or roster nodes for every movement patch.
-  const key = JSON.stringify(players.map(({ id, name, color, connected, ready, score, alive, participating, roundPoints }) =>
-    ({ id, name, color, connected, ready, score, alive, participating, roundPoints }))) + state.hostId + state.phase + session.playerId;
+  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints }) =>
+    ({ id, name, color, connected, score, alive, participating, roundPoints }))) + state.hostId + state.phase + session.playerId;
   if (key === lastRoster) return;
   lastRoster = key;
   const rows = players.map((player) => {
@@ -74,7 +78,7 @@ function renderRoster(state) {
     name.textContent = player.name + (player.id === session.playerId ? ' (you)' : '');
     const status = document.createElement('div');
     status.className = 'player-state';
-    status.textContent = !player.connected ? 'RECONNECTING · SEAT HELD' : state.phase === 'lobby' ? player.ready ? 'READY' : 'GETTING READY'
+    status.textContent = !player.connected ? 'RECONNECTING · SEAT HELD' : state.phase === 'lobby' ? 'IN THE PARTY'
       : !player.participating ? 'SPECTATING · NEXT ROUND' : player.alive ? 'STILL STANDING' : 'ELIMINATED · SPECTATING';
     if (player.id === state.hostId) status.textContent += ' · HOST';
     info.append(name, status);
@@ -101,6 +105,8 @@ function renderRoster(state) {
 function render(state) {
   $('home').hidden = true;
   $('party').hidden = false;
+  $('leave-button').hidden = false;
+  document.body.classList.toggle('is-playing', ['countdown', 'playing'].includes(state.phase));
   ensureGame();
   const me = state.players[session.playerId];
   const host = me?.id === state.hostId;
@@ -113,16 +119,13 @@ function render(state) {
   $('round-label').textContent = `STAY ON THE PLATFORM${state.round ? ` / ROUND ${String(state.round).padStart(2, '0')}` : ''}`;
   $('phase-label').textContent = { lobby: 'The gathering place.', countdown: 'Find your footing.', playing: 'Stay on the Platform', results: 'That was a close one.' }[state.phase] || state.phase;
   $('phase-label').dataset.phase = state.phase;
-  $('ready-button').hidden = state.phase !== 'lobby';
-  $('ready-button').textContent = me?.ready ? 'Ready ✓ · undo' : 'Ready up';
-  $('ready-button').disabled = !online || !me;
   $('start-button').hidden = !host || state.phase !== 'lobby';
   const connected = players.filter((player) => player.connected);
-  $('start-button').disabled = !online || connected.length < 2 || connected.some((player) => !player.ready);
+  $('start-button').disabled = !online || connected.length < 2;
   $('replay-button').hidden = !host || state.phase !== 'results';
   $('replay-button').disabled = !online;
   $('lobby-hint').textContent = !online ? 'Reconnecting automatically. Your character still faces the falling floor.' : state.phase === 'lobby'
-    ? connected.length < 2 ? 'Invite another player to get started.' : host ? 'Everyone ready? You can start the round.' : 'Ready up, then your host starts the round.'
+    ? connected.length < 2 ? 'Invite another player to get started.' : host ? 'Your party is here. Start whenever you like.' : 'Your host will start the round.'
     : state.phase === 'results' ? host ? 'Back to the lobby for another round. Scores carry over.' : 'Your host can bring everyone back for another round.'
       : me?.participating && me.alive ? 'Make every tile count.' : 'You’re spectating. You can play in the next round.';
   $('results-panel').hidden = state.phase !== 'results';
@@ -137,15 +140,16 @@ function renderClock() {
   const state = session?.state;
   if (!state) return;
   const seconds = Math.max(0, Math.ceil((state.phaseEndsAt - (Date.now() + clockOffset)) / 1000));
-  const timed = ['countdown', 'playing'].includes(state.phase);
-  $('timer-value').textContent = timed ? String(seconds).padStart(2, '0') : '—';
-  $('timer-label').textContent = state.phase === 'playing' ? 'SECONDS LEFT' : state.phase === 'countdown' ? 'GET READY' : 'UNTIL THE CHAOS';
+  const survivors = Object.values(state.players).filter((player) => player.participating && player.alive).length;
+  $('timer-value').textContent = state.phase === 'playing' ? String(survivors).padStart(2, '0')
+    : state.phase === 'countdown' ? String(seconds).padStart(2, '0') : '—';
+  $('timer-label').textContent = state.phase === 'playing' ? 'STILL STANDING' : state.phase === 'countdown' ? 'STARTING IN' : 'HOST STARTS THE ROUND';
   const me = state.players[session.playerId];
   const banner = $('stage-banner');
   banner.classList.toggle('countdown', state.phase === 'countdown' && session.connection === 'connected');
   banner.hidden = state.phase === 'playing' && me?.alive && session.connection === 'connected';
   banner.firstElementChild.textContent = session.connection !== 'connected' ? 'Reconnecting… your spot is reserved'
-    : state.phase === 'lobby' ? 'Ready up to start.'
+    : state.phase === 'lobby' ? 'Host starts the round'
       : state.phase === 'countdown' ? Math.max(1, seconds)
         : state.phase === 'results' ? 'One more round?'
           : me?.participating ? 'You fell! Watch the survivors, then try again.' : 'You’re spectating. Join the next round.';
@@ -180,7 +184,6 @@ if (tabClaim === 'claimed') {
   session.status('idle', 'Ready when you are');
   $('create-party').addEventListener('click', () => join(true));
   $('join-form').addEventListener('submit', (event) => { event.preventDefault(); join(false); });
-  $('ready-button').addEventListener('click', () => session.send('ready', !session.state?.players[session.playerId]?.ready));
   $('start-button').addEventListener('click', () => { notice(''); session.send('start'); });
   $('replay-button').addEventListener('click', () => { notice(''); session.send('replay'); });
   $('leave-button').addEventListener('click', () => session.leave());
@@ -206,9 +209,11 @@ if (tabClaim === 'claimed') {
     Object.defineProperty(window, '__partyDebug', { get: () => ({
       playerId: session.playerId, roomId: session.room?.roomId || session.saved?.roomId || '',
       phase: session.state?.phase, round: session.state?.round, players: Object.values(session.state?.players || {}),
-      tiles: session.state?.tiles || [], connection: session.connection,
+      tiles: session.state?.tiles || [], tileGoneAtMs: session.state?.tileGoneAtMs || [],
+      roundElapsedMs: session.state?.roundElapsedMs || 0, connection: session.connection,
       pendingInputs: controls.pending.length, listenerCount: session.listenerCount, sceneCount: game?.sceneCount || 0,
       renderedPositions: game?.renderedPositions || {}, fps: game?.fps || 0, latency: session.latency,
+      renderedCharacters: game?.renderedCharacters || {},
       serverStepMs: session.state?.stepMs || 0,
     }) });
   }

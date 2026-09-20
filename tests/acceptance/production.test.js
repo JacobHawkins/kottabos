@@ -39,7 +39,7 @@ function chunkedPost(url, chunks) {
 }
 
 test('built production serves only public assets and completes the multiplayer round/recovery/replay loop', { timeout: 15_000 }, async (t) => {
-  const server = await createProductionServer({ port: 0, countdownMs: 50, roundDurationMs: 3000, log: false });
+  const server = await createProductionServer({ port: 0, countdownMs: 50, log: false });
   await server.listen();
   const endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
   const connections = new Set();
@@ -80,9 +80,6 @@ test('built production serves only public assets and completes the multiplayer r
   let guest = track(await client.joinById(host.roomId, { name: 'Production guest' }));
   const authoritative = server.rooms.get(host.roomId);
   const [hostId, guestId] = authoritative.state.players.keys();
-  host.send('ready', true);
-  guest.send('ready', true);
-  await until(() => [...authoritative.state.players.values()].every((player) => player.ready), 'production players ready');
   host.send('start');
   await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'production round reaches shared results');
   assert.deepEqual([...host.state.winnerIds], [...guest.state.winnerIds]);

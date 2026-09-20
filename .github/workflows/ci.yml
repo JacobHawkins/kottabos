@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, codex/test]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    # Standard hosted runners are free for this public repository. Do not use
+    # larger runners, paid services, artifact uploads or dependency caches.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Use the production Node version
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax and project conventions
+        run: npm run check
+
+      - name: Test rules and sessions
+        run: npm test
+
+      - name: Test twelve-player recovery and replay
+        run: npm run test:twelve
+
+      - name: Install Chrome and Edge for browser acceptance
+        run: npx playwright install --with-deps chrome msedge
+
+      - name: Test development gameplay and sprites in Chrome and Edge
+        run: npm run test:browser
+
+      - name: Build the public assets
+        run: npm run build
+
+      - name: Test the production server and bundled browser app
+        run: npm run test:production

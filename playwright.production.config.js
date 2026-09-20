@@ -17,6 +17,6 @@ export default defineConfig({
     url: `${baseURL}/api/health`,
     reuseExistingServer: false,
     timeout: 30_000,
-    env: { PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'production', RECONNECT_SECONDS: '5', COUNTDOWN_MS: '350', ROUND_DURATION_MS: '20000' },
+    env: { PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'production', RECONNECT_SECONDS: '5', COUNTDOWN_MS: '350' },
   },
 });

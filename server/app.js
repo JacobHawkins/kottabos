@@ -11,7 +11,6 @@ export async function createAppServer({
   host = '127.0.0.1',
   reconnectionSeconds = 120,
   countdownMs = 3000,
-  roundDurationMs = 45_000,
   maxRooms = 4,
   allowedOrigin = '',
   requestLimits,
@@ -20,8 +19,8 @@ export async function createAppServer({
   if (!Number.isFinite(reconnectionSeconds) || reconnectionSeconds <= 0 || reconnectionSeconds > 600) {
     throw new Error('Reconnection reservation must be between 0 and 600 seconds.');
   }
-  if (!Number.isFinite(countdownMs) || countdownMs < 0 || !Number.isFinite(roundDurationMs) || roundDurationMs <= 0) {
-    throw new Error('Invalid round timing configuration.');
+  if (!Number.isFinite(countdownMs) || countdownMs < 0) {
+    throw new Error('Invalid countdown timing configuration.');
   }
   const instanceId = randomUUID();
   if (!Number.isInteger(maxRooms) || maxRooms < 1 || maxRooms > 100) throw new Error('MAX_ROOMS must be an integer from 1 to 100.');
@@ -70,7 +69,7 @@ export async function createAppServer({
     devMode: false,
   });
   gameServer.define('party', createPartyRoomClass({
-    rooms, instanceId, reconnectionSeconds, countdownMs, roundDurationMs, maxRooms, log: log || (() => {}),
+    rooms, instanceId, reconnectionSeconds, countdownMs, maxRooms, log: log || (() => {}),
   }));
   let closed = false;
   return {

@@ -83,36 +83,13 @@ async function simulateDrop(page) {
   await page.locator('#simulate-drop').click();
 }
 
-async function readyAndStart(host, others) {
-  for (const page of [host, ...others]) await page.locator('#ready-button').click();
+async function startRound(host, others) {
+  for (const page of [host, ...others]) await expect(page.locator('#ready-button')).toHaveCount(0);
   await expect(host.locator('#start-button')).toBeEnabled();
   await host.locator('#start-button').click();
   for (const page of [host, ...others]) {
     await expect.poll(async () => (await snapshot(page))?.phase).toBe('playing');
     await expect(page.locator('#game-container canvas')).toBeVisible();
-  }
-}
-
-async function walkTo(page, target) {
-  await page.locator('#game-container canvas').click({ position: { x: 30, y: 30 } });
-  const id = (await snapshot(page)).playerId;
-  const position = () => snapshot(page).then(state => state.players.find(player => player.id === id));
-  // Move in two short orthogonal legs, using actual keyboard events throughout.
-  for (const axis of ['x', 'y']) {
-    const before = await position();
-    if (!before.alive) break;
-    const direction = Math.sign(target[axis] - before[axis]);
-    if (Math.abs(target[axis] - before[axis]) < 8) continue;
-    const key = axis === 'x' ? (direction > 0 ? 'ArrowRight' : 'ArrowLeft') : (direction > 0 ? 'ArrowDown' : 'ArrowUp');
-    await page.keyboard.down(key);
-    try {
-      await expect.poll(async () => {
-        const current = await position();
-        return current.alive ? direction * (target[axis] - current[axis]) : 0;
-      }, { intervals: [30], timeout: 4000 }).toBeLessThan(8);
-    } finally {
-      await page.keyboard.up(key);
-    }
   }
 }
 
@@ -129,8 +106,7 @@ function followVisibleSafeFloor(page) {
       const previous = new Map([[tile, null]]);
       const queue = [tile];
       let target = tile;
-      // Use only synchronized, currently visible tile colors, never the
-      // server-private future schedule or a fixed presumed final island.
+      // React to the same tile colors/countdown bars players can see.
       for (const current of queue) {
         if (state.tiles[current] === 0) { target = current; break; }
         const column = current % 7;
@@ -148,8 +124,11 @@ function followVisibleSafeFloor(page) {
       const dx = target % 7 * 64 + 32 - player.x;
       const dy = Math.floor(target / 7) * 64 + 32 - player.y;
       const wanted = new Set();
-      if (Math.abs(dx) > 9) wanted.add(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
-      if (Math.abs(dy) > 9) wanted.add(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+      const remaining = state.tileGoneAtMs[tile] - state.roundElapsedMs;
+      if (remaining < 950) {
+        if (Math.abs(dx) > 9) wanted.add(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+        if (Math.abs(dy) > 9) wanted.add(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+      }
       for (const key of held) if (!wanted.has(key)) { await page.keyboard.up(key); held.delete(key); }
       for (const key of wanted) if (!held.has(key)) { await page.keyboard.down(key); held.add(key); }
       await page.waitForTimeout(40);
@@ -230,129 +209,96 @@ test('Chrome + Edge lobby, repeated refresh, dropped connection, close/reopen, d
     const fresh = await connected(host);
     expect(fresh.playerId).not.toBe(initial.playerId);
     await countPlayers(reopened, 2);
-    await host.locator('#ready-button').click();
-    await reopened.locator('#ready-button').click();
     await expect(reopened.locator('#start-button')).toBeEnabled();
     expect(await host.locator('#start-button').isVisible() && await host.locator('#start-button').isEnabled()).toBe(false);
   });
 });
 
-test('Authoritative round, responsive keyboard movement, eliminated refresh, spectator join, shared results and replay', async ({ partyBrowsers }, testInfo) => {
+test('Player-triggered floors, focused arena, movement, recovery, results and host replay', async ({ partyBrowsers }, testInfo) => {
   const { host, guest, newPlayer, baseURL } = partyBrowsers;
   const code = await createParty(host, baseURL);
   await joinParty(guest, baseURL, code);
   const third = await newPlayer(0);
   await joinParty(third, baseURL, code, 'Dionysus');
   await countPlayers(host, 3);
-  await readyAndStart(host, [guest, third]);
+  const lobbySize = await host.locator('.stage').boundingBox();
+  await startRound(host, [guest, third]);
   const hostId = (await snapshot(host)).playerId;
   const guestId = (await snapshot(guest)).playerId;
+  let stopSurvivors = [followVisibleSafeFloor(host), followVisibleSafeFloor(third)];
+  try {
+    await test.step('The round expands the arena and exposes only compact game controls', async () => {
+      await expect(host.locator('body')).toHaveClass(/is-playing/);
+      await expect(host.locator('.party-sidebar')).toBeHidden();
+      await expect(host.locator('#leave-button')).toBeVisible();
+      await expect(host.locator('#connection-status')).toBeVisible();
+      const stage = await host.locator('.stage').boundingBox();
+      expect(stage.width).toBeGreaterThan(lobbySize.width + 50);
+      expect(stage.y + stage.height).toBeLessThanOrEqual(1000);
+      const canvas = await host.locator('#game-container canvas').boundingBox();
+      expect(Math.abs(canvas.width - Math.min(stage.width, stage.height))).toBeLessThan(4);
+      await host.screenshot({ path: testInfo.outputPath('focused-round.png'), fullPage: true });
+    });
 
-  await test.step('Refresh during play restores the same participant and current round', async () => {
-    const before = await snapshot(guest);
-    await guest.reload();
-    const after = await connected(guest, guestId);
-    expect(after.round).toBe(before.round);
-    expect(after.players.find(player => player.id === guestId).participating).toBe(true);
-    await countPlayers(host, 3);
-  });
+    await test.step('Moving arms new tiles and disconnecting leaves a vulnerable character', async () => {
+      const before = (await snapshot(guest)).players.find(player => player.id === guestId);
+      await guest.locator('#game-container').focus();
+      await guest.keyboard.down('ArrowLeft');
+      await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === guestId).x, { intervals: [30] }).toBeLessThan(before.x - 35);
+      await simulateDrop(guest);
+      await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === guestId).connected).toBe(false);
+      const dropped = (await snapshot(host)).players.find(player => player.id === guestId);
+      await guest.keyboard.up('ArrowLeft');
+      await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === guestId).alive).toBe(false);
+      const fallen = (await snapshot(host)).players.find(player => player.id === guestId);
+      expect(fallen.x).toBe(dropped.x);
+      expect(fallen.y).toBe(dropped.y);
+      await connected(guest, guestId);
+      expect((await snapshot(guest)).players.find(player => player.id === guestId).alive).toBe(false);
+      await guest.reload();
+      await connected(guest, guestId);
+      expect((await snapshot(guest)).players.find(player => player.id === guestId).alive).toBe(false);
+      await countPlayers(host, 3);
+    });
 
-  await test.step('A playing disconnect clears held inputs and restores the same character', async () => {
-    await guest.locator('#game-container canvas').click({ position: { x: 30, y: 30 } });
-    await guest.keyboard.down('ArrowLeft');
-    await simulateDrop(guest);
-    await expect(guest.locator('#connection-status')).toContainText(/reconnect|recover|offline/i);
-    await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === guestId).connected).toBe(false);
-    const disconnectedPosition = (await snapshot(host)).players.find(player => player.id === guestId);
-    await host.waitForTimeout(700);
-    const stillDisconnected = (await snapshot(host)).players.find(player => player.id === guestId);
-    expect(stillDisconnected.x).toBe(disconnectedPosition.x);
-    expect(stillDisconnected.y).toBe(disconnectedPosition.y);
-    await guest.keyboard.up('ArrowLeft');
-    await connected(guest, guestId);
-    await countPlayers(host, 3);
-  });
-
-  const stopSurvivors = [followVisibleSafeFloor(guest), followVisibleSafeFloor(third)];
-  await test.step('Keyboard input moves the authoritative character and is visible remotely', async () => {
-    // Keep two survivors responding to visible warnings while the eliminated
-    // player refreshes and a spectator joins; the final destination now varies.
-    const before = (await snapshot(host)).players.find(player => player.id === hostId);
-    await host.locator('#game-container canvas').click({ position: { x: 30, y: 30 } });
-    await host.keyboard.down('ArrowLeft');
-    await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === hostId).x).toBeLessThan(before.x - 15);
-    await expect.poll(async () => (await snapshot(guest)).players.find(player => player.id === hostId).x).toBeLessThan(before.x - 15);
-    await host.keyboard.up('ArrowLeft');
-    await expect.poll(async () => (await snapshot(host)).tiles.includes(2)).toBe(true);
-    const visible = await snapshot(host);
-    const removed = visible.tiles.findIndex((tile) => tile === 2);
-    expect(removed, 'at least one visible floor tile has already disappeared').toBeGreaterThanOrEqual(0);
-    await walkTo(host, { x: removed % 7 * 64 + 32, y: Math.floor(removed / 7) * 64 + 32 });
-    await expect.poll(async () => (await snapshot(host)).players.find(player => player.id === hostId).alive, { timeout: 15_000 }).toBe(false);
-  });
-
-  await test.step('An eliminated player remains eliminated after recovery', async () => {
-    const before = await snapshot(host);
-    await host.reload();
-    const after = await connected(host, hostId);
-    expect(after.round).toBe(before.round);
-    expect(after.players.find(player => player.id === hostId).alive).toBe(false);
-    expect(after.players.find(player => player.id === hostId).score).toBe(before.players.find(player => player.id === hostId).score);
-    await countPlayers(guest, 3);
-    await host.screenshot({ path: testInfo.outputPath('playing-eliminated.png'), fullPage: true });
-  });
-
-  const spectator = await newPlayer(1);
-  await joinParty(spectator, baseURL, code, 'Iris');
-  const spectatorState = await snapshot(spectator);
-  expect(spectatorState.players.find(player => player.id === spectatorState.playerId).participating).toBe(false);
-  expect(spectatorState.players.find(player => player.id === spectatorState.playerId).alive).toBe(false);
-
-  await test.step('All clients receive the same result and cumulative scores', async () => {
-    await expect.poll(async () => (await snapshot(host)).phase, { timeout: 25_000 }).toBe('results');
-    await expect.poll(async () => (await snapshot(guest)).phase).toBe('results');
-    await Promise.all(stopSurvivors.map((stop) => stop()));
-    expect((await snapshot(guest)).players.find((player) => player.id === guestId).alive).toBe(true);
-    const resultText = await host.locator('#result-text').innerText();
-    expect(resultText.length).toBeGreaterThan(5);
-    await expect(guest.locator('#result-text')).toHaveText(resultText);
+    const spectator = await newPlayer(1);
+    await joinParty(spectator, baseURL, code, 'Iris');
+    const joined = await snapshot(spectator);
+    expect(joined.phase).toBe('playing');
+    expect(joined.players.find(player => player.id === joined.playerId).participating).toBe(false);
+    await Promise.all(stopSurvivors.map(stop => stop()));
+    stopSurvivors = [];
+    await expect.poll(async () => (await snapshot(host)).phase).toBe('results');
+    for (const page of [host, guest, third, spectator]) {
+      await expect(page.locator('#result-text')).toHaveText(await host.locator('#result-text').innerText());
+      await expect(page.locator('body')).not.toHaveClass(/is-playing/);
+      await expect(page.locator('.party-sidebar')).toBeVisible();
+    }
     const scoreState = page => snapshot(page).then(state => state.players.map(({ id, score }) => ({ id, score })).sort((a, b) => a.id.localeCompare(b.id)));
     await expect.poll(() => scoreState(guest)).toEqual(await scoreState(host));
-    expect((await scoreState(host)).some(player => player.score > 0)).toBe(true);
-    await expect(third.locator('#result-text')).toHaveText(resultText);
+    const awarded = (await snapshot(host)).players.find(player => player.score > 0);
+    expect(awarded).toBeTruthy();
+    const winnerPage = awarded.id === hostId ? host : third;
+    await winnerPage.reload();
+    await connected(winnerPage, awarded.id);
+    expect((await snapshot(winnerPage)).players.find(player => player.id === awarded.id).score).toBe(awarded.score);
     await host.screenshot({ path: testInfo.outputPath('results.png'), fullPage: true });
     const diagnostics = await Promise.all([host, guest].map(async page => {
       const { fps, latency, serverStepMs, pendingInputs, listenerCount, sceneCount } = await snapshot(page);
       return { fps, latency, serverStepMs, pendingInputs, listenerCount, sceneCount };
     }));
-    const diagnosticsPath = testInfo.outputPath('local-diagnostics.json');
-    await writeFile(diagnosticsPath, JSON.stringify(diagnostics, null, 2));
-    await testInfo.attach('local-diagnostics', { path: diagnosticsPath, contentType: 'application/json' });
-  });
-
-  await test.step('Refresh also preserves an earned score and the completed result', async () => {
-    const before = await snapshot(guest);
-    const score = before.players.find(player => player.id === guestId).score;
-    expect(score).toBeGreaterThan(0);
-    await guest.reload();
-    const after = await connected(guest, guestId);
-    expect(after.phase).toBe('results');
-    expect(after.players.find(player => player.id === guestId).score).toBe(score);
-    expect(after.listenerCount).toBe(before.listenerCount);
-    await countPlayers(host, 4);
-  });
-
-  await test.step('Host replay returns everyone to the lobby and allows the next round', async () => {
-    const priorRound = (await snapshot(host)).round;
-    const replayHost = await host.locator('#replay-button').isVisible() ? host : guest;
+    await writeFile(testInfo.outputPath('local-diagnostics.json'), JSON.stringify(diagnostics, null, 2));
+    const all = [host, guest, third, spectator];
+    let replayHost;
+    for (const page of all) if (await page.locator('#replay-button').isVisible()) replayHost = page;
     await replayHost.locator('#replay-button').click();
-    await expect.poll(async () => (await snapshot(guest)).phase).toBe('lobby');
-    await readyAndStart(replayHost, [host, guest, third, spectator].filter(page => page !== replayHost));
-    const next = await snapshot(host);
-    expect(next.round).toBe(priorRound + 1);
-    expect(next.players.every(player => player.alive && player.participating)).toBe(true);
-    await countPlayers(host, 4);
-  });
+    await expect.poll(async () => (await snapshot(host)).phase).toBe('lobby');
+    await startRound(replayHost, all.filter(page => page !== replayHost));
+    expect((await snapshot(host)).round).toBe(2);
+    expect((await snapshot(host)).players.every(player => player.alive && player.participating)).toBe(true);
+  } finally {
+    await Promise.all(stopSurvivors.map(stop => stop()));
+  }
 });
 
 test('Expired reservation explains recovery failure and permits a fresh identity', async ({ partyBrowsers }) => {
