@@ -1,12 +1,14 @@
 # Free family playtest deployment
 
-Implementation/research date: September 19, 2026. One Node process serves the built Phaser client, HTTP endpoints and Colyseus WebSockets. Production remains in memory: sleep, restart, redeploy or suspension loses parties and scores.
+Initial hosting: September 19, 2026. Release workflow updated at the owner's request on September 20, 2026. One Node process serves the built Phaser client, HTTP endpoints and Colyseus WebSockets. Production remains in memory: sleep, restart, redeploy or suspension loses parties and scores.
 
-Live service: **[kottabos.onrender.com](https://kottabos.onrender.com)**. Source: **[JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos)**, `main`. Initial application revision: `b66814ebca7ed1daf83519bd8622fd1e471d6774`. This service was created through Render's dashboard using the public repository and the settings below; `render.yaml` is the reproducible equivalent, not an attached managed Blueprint. Do not apply it as a second service.
+Live service: **[kottabos.onrender.com](https://kottabos.onrender.com)**. Source: **[JacobHawkins/kottabos](https://github.com/JacobHawkins/kottabos)**, release branch `main`. Before this workflow change, the observed live revision was `6820902`, while GitHub main was `2c34a1f`; a GitHub push had not automatically updated Render. The existing GitHub integration, main branch and saved **After CI Checks Pass** setting were verified in Render on September 20. GitHub main protection was also applied successfully: required pull request, up-to-date passing `validate` from GitHub Actions, administrator enforcement, resolved conversations, and no force-pushes or deletion. See [verification.md](verification.md) and the [initial release pull request](https://github.com/JacobHawkins/kottabos/pull/1) for recorded checks and deployment evidence. Render's Deploys page shows the authoritative currently live revision.
+
+This service was created through Render's dashboard. `render.yaml` records its intended configuration and is not an attached managed Blueprint. Configure the existing service in its dashboard as described below; do not create a second service or assume that pushing YAML changes its settings.
 
 ## Reviewed configuration
 
-Use [render.yaml](../render.yaml) for one **Free** Node Web Service, one instance, manual deploys, `/api/health`, and the provider HTTPS subdomain. Oregon is the proposed western-US region; choose the closest supported region to the group before creation (the region cannot be changed in place). No database, disk, paid compute, preview service, custom domain, trial or keep-awake traffic is required. The repository/branch containing the Blueprint supplies the source; confirm the selected branch in the creation screen.
+Use [render.yaml](../render.yaml) for one **Free** Node Web Service in Oregon, one instance, branch `main`, `autoDeployTrigger: checksPass`, `/api/health`, and the provider HTTPS subdomain. Keep the existing region and service. No database, disk, paid compute, test/preview service, custom domain, trial or keep-awake traffic is required. The owner's September 20 request supersedes the older manual-only deployment policy. [Render Blueprint fields](https://render.com/docs/blueprint-spec)
 
 ```powershell
 npm ci --include=dev
@@ -16,7 +18,7 @@ npm run start:prod
 
 Render build: `npm ci --include=dev && npm run build`. Start: `npm run start:prod`. `.node-version` pins **24.21.0**. `PORT` is provided by Render; the process binds `0.0.0.0`. `RENDER_EXTERNAL_URL` supplies the allowed browser origin (or set `PUBLIC_ORIGIN` explicitly). The client uses its page origin; the pinned SDK converts HTTPS to WSS. Render terminates TLS and forwards HTTP/WebSockets to the same service port. See [Render WebSockets](https://render.com/docs/websocket), [web service setup](https://render.com/docs/web-services), [Node selection](https://render.com/docs/node-version), and [Vite's production guidance](https://vite.dev/guide/static-deploy.html).
 
-Normal settings: `NODE_ENV=production`, `MAX_ROOMS=4`, `RECONNECT_SECONDS=120`, `COUNTDOWN_MS=3000`, `ROUND_DURATION_MS=45000`. Do not carry accelerated test timings into deployment. `HOST=127.0.0.1` is an optional local production override. No secrets go in the browser or repository. Test tooling is a build/dev dependency and is never loaded by the production entry.
+Normal settings: `NODE_ENV=production`, `MAX_ROOMS=4`, `RECONNECT_SECONDS=120`, `COUNTDOWN_MS=3000`. Do not carry accelerated test timings into deployment. `HOST=127.0.0.1` is an optional local production override. No secrets go in the browser or repository. Test tooling is a build/dev dependency and is never loaded by the production entry.
 
 Run the small authorized public smoke test from PowerShell (creates isolated test players and leaves afterward):
 
@@ -36,17 +38,32 @@ Hobby Starter build pipelines include **500 minutes**. The pipeline spend limit 
 
 Predeployment read-only account inspection found the approved Hobby workspace had **no card on file**, four existing suspended services, zero current Free hours/bandwidth/build minutes, and $0 current/projected charges. No other service or billing setting was changed. This is a point-in-time account observation, not a permanent guarantee if someone later changes billing. Keep account identifiers and billing screenshots out of this public repository.
 
+The September 20 check before enabling automatic releases again found **no payment method and $0 charges**. Included usage was 2.4/750 Free instance hours, 10 MB/5 GB bandwidth and 1/500 build minutes. The same no-card safeguard and shared allowance thresholds remain in force.
+
 Before later sessions, inspect workspace Billing → Monthly Included Usage and the game's Metrics page. Stop this experiment for the month at **80% of any included allowance** (600 hours, 4 GB, or 400 pipeline minutes), or sooner if unrelated services need the shared quota. This is a manual operational threshold; no polling job or paid monitoring service is installed. Stop playing with Leave Party and close game tabs so active gameplay heartbeats cease.
 
-## Create, update and stop
+## GitHub and Render setup
 
-1. Confirm the account/workspace, source repository/branch, region, no payment method, and shared usage. If the host demands a card, stop; do not accept a paid fallback.
-2. New → Web Service, select the authorized source. Choose Node and **Free**, then enter the build/start/health/environment settings above. Disable auto-deploys. Review the final screen before creation. Public source is allowed for this project by the owner; a public repo alone does not deploy it.
-3. Check build logs and the service's HTTPS URL. Verify assets load, game sockets use WSS, two isolated players can join, finish/replay, and recover. Record the live revision and URL in `docs/verification.md`.
-4. For an update, run the local checks, commit/push, then use service → Manual Deploy → Deploy latest commit between play sessions. Auto-deploys remain off. The deployment ends existing parties.
-5. Inspect service Logs and Events for startup/deploy failures; do not paste reconnection credentials. Use Metrics for bandwidth and workspace Billing for aggregate usage and builds.
-6. If a release is bad, choose an earlier successful deploy in Events and use Rollback. Free services retain only the two most recent prior deploys; keep Git history too. Recheck the round/recovery loop afterward.
-7. Stop the playtest with the service's Suspend control in Settings. Resume only deliberately. Deleting the service permanently removes its configuration; suspend for a reversible stop. No other services need to change.
+The intended flow is `codex/test` → passing pull request into `main` → passing main CI → automatic Render deployment. These are separate checks: green development CI does not itself deploy, and a completed GitHub merge does not prove the Render build is live.
+
+1. Keep `codex/test` as the development/testing branch and `main` as the production branch. No Render service tracks `codex/test`.
+2. Enable [.github/workflows/ci.yml](../.github/workflows/ci.yml). It runs on pushes to both branches, pull requests targeting main, and manual dispatch. Its single required check is named **`validate`**.
+3. Protect `main`: require a pull request, the `validate` status check, and an up-to-date branch before merging. Apply the rule to administrators too; do not allow force-pushes, deletion or bypasses. The owner can merge their own tested pull request; a second person's approval is not required by this workflow.
+4. In the existing Render service, confirm the linked repository is `JacobHawkins/kottabos`, branch is `main`, and Auto-Deploy is **After CI Checks Pass**. A connected GitHub provider is required: services configured only with a public repository URL cannot auto-deploy. Preserve Free compute, one instance, environment settings, no card and shared usage limits. [Render auto-deploy and CI integration](https://render.com/docs/deploys)
+5. Verify the full path with the release: a passing `validate` check on the merged main revision, a successful Render deployment of that same revision, and a working public game. Record the evidence in [verification.md](verification.md).
+
+CI uses `.node-version`, `npm ci`, syntax checks, focused rule/session tests, twelve-player acceptance, real Chrome/Edge browser tests, a production build and production acceptance. The production browser test verifies the bundled character sheet and its credits download. The 20-minute job runs on a standard Ubuntu runner, has read-only repository permissions, and cancels older runs for the same ref. It uploads no artifacts, creates no persistent caches, uses no deployment secrets and provisions no services. Standard GitHub-hosted runners are free for public repositories; recheck billing before changing repository visibility or runner type. [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+
+Keep `validate` unconditional and do not add path filters that prevent it from running on a release. Render waits when no checks exist or a check fails, but accepts skipped/neutral check conclusions as well as success. Preserve the real test steps rather than skipping them to release. The actual deployed revision is authoritative when a build fails or is canceled.
+
+## Release, recover and stop
+
+1. Develop and test on `codex/test`, commit/push it, and inspect its CI results. Open a pull request into main and fix any failing checks on the test branch.
+2. Merge the passing pull request when ready to release, between play sessions. The main commit runs CI again, then Render builds and deploys it. Do not use Manual Deploy for routine releases; deployments end existing parties.
+3. Check Render Events/Logs and the HTTPS game. Verify assets, WSS, two-player joining, results/replay and recovery; record the actual revision. Never paste reconnection credentials into logs or reports.
+4. Merge the latest `origin/main` back into `codex/test` before the next development change, keeping it aligned with released changes.
+5. If a release is bad, use Render's Rollback for an earlier successful deployment, then prepare the fix or revert through `codex/test` and a tested main pull request. Check the Auto-Deploy setting afterward: rollback or deploying a specific commit can disable it. Restore **After CI Checks Pass** when the intended main revision is ready. Recheck the round/recovery loop.
+6. Monitor Metrics and Billing under the $0 rules above. To stop reversibly, use the existing service's Suspend control; resume deliberately. Do not delete/recreate the service or alter unrelated services.
 
 ## Public protections and limits
 

@@ -1,24 +1,61 @@
 import Phaser from 'phaser';
-import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE } from '../shared/constants.js';
+import characterSheetUrl from './assets/character-spritesheet.png?url';
+import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE, TILE_WARNING_MS } from '../shared/constants.js';
 
 const PADDING = 50;
 const SIZE = ARENA.width + PADDING * 2;
 const toColor = (color) => Number.parseInt(color.replace('#', ''), 16);
 
+const CHARACTER_TEXTURE = 'party-character';
+// The supplied LPC expanded sheet is 13 columns of 64-pixel cells. These rows
+// were checked against this PNG, including the outfit in idle/walk/hurt poses.
+const CHARACTER_ROWS = { up: { walk: 8, idle: 22 }, left: { walk: 9, idle: 23 },
+  down: { walk: 10, idle: 24 }, right: { walk: 11, idle: 25 } };
+const frameAt = (row, column = 0) => row * 13 + column;
+
+function createCharacter(scene, color, number) {
+  const shadow = scene.add.ellipse(0, 4, 36, 15, 0x112e31, .45);
+  const marker = scene.add.ellipse(0, 3, 34, 12, color);
+  const ring = scene.add.ellipse(0, 3, 42, 18).setStrokeStyle(2, 0xecffe9, .95);
+  // Anchor the feet, not the texture's empty center, to the gameplay position.
+  const sprite = scene.add.sprite(0, 0, CHARACTER_TEXTURE, frameAt(CHARACTER_ROWS.down.idle))
+    .setOrigin(.5, 62 / 64).setScale(.75);
+  const badge = scene.add.text(0, 13, number, {
+    fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#102936',
+    backgroundColor: `#${color.toString(16).padStart(6, '0')}`, padding: { x: 3, y: 1 },
+  }).setOrigin(.5);
+  const label = scene.add.text(0, -49, '', {
+    fontFamily: 'monospace', fontSize: '10px', color: '#fffce8',
+    backgroundColor: '#102331', padding: { x: 5, y: 3 },
+  }).setOrigin(.5);
+  const container = scene.add.container(0, 0, [shadow, marker, ring, sprite, badge, label]);
+  return { container, label, ring, sprite, number, facing: 'down', moving: false,
+    previous: null, round: null, phase: null, wasAlive: null };
+}
+
 export function createGame(session, controls) {
   let scene;
+  const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   class PlatformScene extends Phaser.Scene {
     constructor() { super('platform'); }
+    preload() {
+      this.load.spritesheet(CHARACTER_TEXTURE, characterSheetUrl, { frameWidth: 64, frameHeight: 64 });
+    }
     create() {
       scene = this;
+      this.textures.get(CHARACTER_TEXTURE).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      for (const [direction, rows] of Object.entries(CHARACTER_ROWS)) {
+        this.anims.create({ key: `party-walk-${direction}`, frames: this.anims.generateFrameNumbers(CHARACTER_TEXTURE,
+          { start: frameAt(rows.walk, 1), end: frameAt(rows.walk, 8) }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: `party-idle-${direction}`, frames: [0, 0, 1].map(column =>
+          ({ key: CHARACTER_TEXTURE, frame: frameAt(rows.idle, column) })), frameRate: 2, repeat: -1 });
+      }
+      this.anims.create({ key: 'party-fall', frames: this.anims.generateFrameNumbers(CHARACTER_TEXTURE,
+        { start: frameAt(20), end: frameAt(20, 5) }), frameRate: 8, repeat: 0 });
       this.board = this.add.graphics();
       this.characters = new Map();
       this.samples = [];
       this.fps = 0;
-      this.add.text(SIZE / 2, 19, 'THE FLOOR IS NOT YOUR FRIEND', {
-        fontFamily: 'monospace', fontSize: '9px', color: '#7997a4', letterSpacing: 2,
-      }).setOrigin(0.5);
-      this.add.text(17, SIZE / 2, 'K / 001', { fontFamily: 'monospace', fontSize: '9px', color: '#557380' }).setOrigin(0.5).setAngle(-90);
     }
 
     capture(state) {
@@ -75,6 +112,12 @@ export function createGame(session, controls) {
         graphics.lineStyle(1, warning ? 0xffd79a : 0xa5c7a8, warning ? .85 : .3);
         graphics.strokeRoundedRect(x + 3, y + 3, 58, 52, 4);
         if (warning) {
+          const remaining = Math.max(0, Math.min(1,
+            ((state.tileGoneAtMs?.[index] ?? state.roundElapsedMs + TILE_WARNING_MS) - state.roundElapsedMs) / TILE_WARNING_MS));
+          graphics.fillStyle(0x513d2a, .5);
+          graphics.fillRoundedRect(x + 9, y + 47, 46, 4, 2);
+          graphics.fillStyle(0xfff0bc);
+          graphics.fillRoundedRect(x + 9, y + 47, Math.max(1, 46 * remaining), 4, 2);
           graphics.lineStyle(2, 0x765730, .7);
           graphics.lineBetween(x + 27, y + 19, x + 36, y + 26);
           graphics.lineBetween(x + 36, y + 26, x + 27, y + 37);
@@ -92,15 +135,7 @@ export function createGame(session, controls) {
         const seat = Math.max(0, PLAYER_COLORS.indexOf(player.color));
         const number = String(seat + 1).padStart(2, '0');
         if (!character) {
-          const shadow = this.add.ellipse(0, 11, 31, 12, 0x112e31, .35);
-          const body = this.add.graphics();
-          body.fillStyle(toColor(player.color));
-          body.fillRoundedRect(-14, -19, 28, 31, { tl: 11, tr: 11, bl: 7, br: 7 });
-          const badge = this.add.text(0, -4, number, { fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#102936' }).setOrigin(.5);
-          const ring = this.add.ellipse(0, 10, 36, 14).setStrokeStyle(2, 0xecffe9, .9);
-          const label = this.add.text(0, -34, '', { fontFamily: 'monospace', fontSize: '11px', color: '#fffce8', backgroundColor: '#102331', padding: { x: 5, y: 3 } }).setOrigin(.5);
-          const container = this.add.container(0, 0, [shadow, ring, body, badge, label]);
-          character = { container, label, ring };
+          character = createCharacter(this, toColor(player.color), number);
           this.characters.set(player.id, character);
         }
         const lobby = state.phase === 'lobby';
@@ -112,8 +147,41 @@ export function createGame(session, controls) {
         const visible = lobby || player.participating;
         character.container.setVisible(visible);
         if (!visible) return;
-        const position = lobby ? { x: 64 + seat % 4 * (ARENA.width - 128) / 3, y: 104 + Math.floor(seat / 4) * 120 }
+        const position = lobby ? { x: 64 + seat % 4 * (ARENA.width - 128) / 3, y: 104 + Math.floor(seat / 4) * 112 }
           : local ? (controls.position() || player) : this.remotePosition(player, performance.now());
+        // Keep identity labels inside the canvas even against its top/side edges.
+        const labelHalfWidth = character.label.width / 2 + 3;
+        character.label.setPosition(
+          Math.max(labelHalfWidth - PADDING - position.x, Math.min(0, SIZE - labelHalfWidth - PADDING - position.x)),
+          position.y < 22 ? 33 : -49,
+        );
+        const resetPose = character.round !== state.round || character.phase !== state.phase;
+        const dx = !resetPose && character.previous ? position.x - character.previous.x : 0;
+        const dy = !resetPose && character.previous ? position.y - character.previous.y : 0;
+        // Local reconciliation can move a few pixels backwards. Face the held
+        // input so corrections do not turn the sprite around after key release.
+        const direction = local ? controls.direction() : { x: dx, y: dy };
+        character.moving = state.phase === 'playing' && player.alive && player.connected &&
+          session.connection === 'connected' && Math.hypot(dx, dy) > .05 && Math.hypot(direction.x, direction.y) > .01;
+        if (resetPose && (lobby || state.phase === 'countdown' || character.round !== state.round)) character.facing = 'down';
+        if (character.moving) character.facing = Math.abs(direction.x) > Math.abs(direction.y)
+          ? direction.x > 0 ? 'right' : 'left' : direction.y > 0 ? 'down' : 'up';
+        const fallen = !lobby && !player.alive;
+        const { sprite } = character;
+        if (fallen) {
+          // A fresh scene showing an eliminated player restores the final pose.
+          // An alive-to-eliminated transition in this scene animates only once.
+          if (motionPreference.matches || character.wasAlive === null) sprite.stop().setFrame(frameAt(20, 5));
+          else if (character.wasAlive) sprite.play('party-fall');
+        } else if (motionPreference.matches || !player.connected || session.connection !== 'connected') {
+          sprite.stop().setFrame(frameAt(CHARACTER_ROWS[character.facing].idle));
+        } else {
+          sprite.play(`party-${character.moving ? 'walk' : 'idle'}-${character.facing}`, true);
+        }
+        character.previous = { x: position.x, y: position.y };
+        character.round = state.round;
+        character.phase = state.phase;
+        character.wasAlive = player.alive;
         character.container.setPosition(PADDING + position.x, PADDING + position.y);
         character.container.setDepth((local ? ARENA.height : 0) + position.y + 10);
         character.container.setAlpha(!lobby && !player.alive ? .22 : player.connected ? 1 : .5);
@@ -136,11 +204,23 @@ export function createGame(session, controls) {
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: PlatformScene,
   });
+  // Phase changes resize the parent without necessarily resizing the window.
+  const resizeObserver = new ResizeObserver(() => {
+    if (!game.scale.canvas) return;
+    game.scale.getParentBounds();
+    game.scale.refresh();
+  });
+  resizeObserver.observe(document.getElementById('game-container'));
   return {
     capture: (state) => scene?.capture(state),
-    destroy: () => game.destroy(true),
+    destroy: () => { resizeObserver.disconnect(); game.destroy(true); },
     get fps() { return scene?.fps || 0; },
     get sceneCount() { return game.scene.scenes.length; },
+    get renderedCharacters() { return scene ? Object.fromEntries([...scene.characters].map(([id, value]) => [id, {
+      texture: value.sprite.texture.key, frame: value.sprite.frame.name, facing: value.facing, moving: value.moving,
+      visible: value.container.visible, alpha: value.container.alpha, number: value.number,
+      animation: value.sprite.anims.currentAnim?.key || '', animating: value.sprite.anims.isPlaying,
+    }])) : {}; },
     get renderedPositions() { return scene ? Object.fromEntries([...scene.characters].map(([id, value]) => [id, { x: value.container.x - PADDING, y: value.container.y - PADDING }])) : {}; },
   };
 }

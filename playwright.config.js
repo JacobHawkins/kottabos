@@ -24,7 +24,6 @@ export default defineConfig({
       HOST: '127.0.0.1',
       RECONNECT_SECONDS: '4',
       COUNTDOWN_MS: '350',
-      ROUND_DURATION_MS: '20000',
     },
   },
 });

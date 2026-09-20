@@ -1,5 +1,47 @@
 # Verification record
 
+## September 20, 2026 — test branch and automatic release pipeline
+
+The owner requested development/testing on a separate branch and automatic Render releases from `main`. Before this setup, GitHub `main` was at `2c34a1f09c49690d9ab7018a87efc8af7c8ebb0b`, Render was serving `682090227c5d099f337315c12ce034b27b0e526f`, and the player-triggered floor, focus UI and sprite changes existed only locally. Work moved to `codex/test` without discarding those changes.
+
+Local pre-release verification passed on Node 24.21.0: `npm run check`, `npm run build`, both production server/protection tests and all nine production Chrome/Edge browser cases. The production browser flow now verifies the bundled 832×3456 sprite PNG and same-origin credits download. The existing Phaser bundle-size warning remains.
+
+Read-only Render account inspection confirmed the existing service still uses Free compute and the workspace remains Hobby with no card on file. Usage at inspection was 2.4 of 750 Free hours, 10 MB of 5 GB bandwidth and 1 of 500 pipeline minutes; current/projected charges were $0. No billing settings or unrelated services were changed.
+
+The existing GitHub-connected Render service was saved and verified as **After CI Checks Pass**, branch `main`. GitHub main protection now requires a pull request, an up-to-date branch and the `validate` check from the GitHub Actions app, including administrators; force pushes and deletion are disabled. No second reviewer is required for this owner-managed repository. [Release PR #1](https://github.com/JacobHawkins/kottabos/pull/1) carries the final CI and deployment evidence; Render's Deploys page identifies the currently live revision.
+
+The first two GitHub runs passed syntax, rules/session and twelve-player checks, but exposed browser test races on the Linux runner: a refresh snapshot could be taken before the sprite scene loaded, and the restart test could stop the server during the initial renderer download. The tests now wait for exactly one scene and the local character's first rendered position before checking repeated refreshes or intentionally restarting the server. Original identity, score, scene-count and listener-count assertions remain. These failures blocked promotion to main, leaving the live service unchanged.
+
+Both affected cases passed locally after the synchronization fix. A related renderer import error is now displayed only for the same still-connected party, so a late failure cannot overwrite leave/ended/recovery feedback. Two deterministic browser regressions hold the module request and release its failure after the desired session state; both passed locally, including the check that a genuine connected-party renderer failure still reports its error.
+
+## September 20, 2026 — supplied Universal LPC sprite sheet
+
+Replaced the code-drawn characters with the owner's supplied 832×3456 PNG, preserved byte-for-byte. Four-direction walking, directional idle and one-shot falling select the verified 64×64 LPC frames; colored ground markers, number badges and the local ring/YOU label preserve twelve-player identity. No server movement, floor, scoring or recovery rules changed. Asset provenance and the generator's complete credit catalog are included, with discoverable footer links; the catalog is a click-only download.
+
+- `npm run check` and `git diff --check` passed.
+- Five focused Chrome/Edge browser cases passed across the focused runs: the two mobile cases, twelve-player layout/replay, the player-triggered movement/recovery/results flow, and the new sprite case. Mobile emulation covers portrait, landscape and touch cancellation/release. This is not a new physical-phone playtest.
+- The sprite case verifies the actual PNG response, shared texture and distinct identity numbers, multiple walking frames on both clients, directional idle after release, reduced-motion still poses, eliminated final-pose restoration after refresh, score/identity recovery, and replay reset. Desktop and phone screenshots were visually inspected.
+- The first new sprite test incorrectly classified Phaser's PNG loader as an image request; it uses XHR. The test now checks the PNG MIME type and path, excluding Vite's asset-URL JavaScript response. The asset itself loaded correctly throughout.
+- No dependencies changed. No production build, production test suite or deployment was run. Temporary browser-test servers were stopped. Audio remains disabled; the user's audio question was answered without adding unrequested sound files or playback.
+
+
+
+## September 20, 2026 — player-triggered floors and game focus
+
+The owner replaced scheduled/random floor removal with player-triggered collapse, removed player readiness, and requested a larger round view and improved characters. These changes are local and have not been deployed. Older results below describe earlier gameplay and remain historical evidence.
+
+- Each living participant activates the tile under their center for one irreversible 1.8-second warning. Untouched tiles stay safe; all tiles can fall. The seeded schedule, final-island selection and round deadline were removed.
+- The host starts with at least two connected players. Ready controls, synchronized readiness and readiness messages were removed. Countdown/playing expand the arena and keep compact connection/Leave/survivor controls; results restore the lobby and scores.
+- Characters now have faces, three silhouette variants, animated feet and numbered badges. Presentation respects reduced motion and retains local identification. Tile countdown bars use synchronized deadlines.
+- `npm run check` and `npm test` passed: **51 tests**, including 16 rule tests, real session/recovery tests and 100/250 ms added WebSocket RTT. Rules include a real input path lasting beyond the former 45-second deadline, unvisited tiles staying safe, irreversible timers, exact fall boundaries, disconnected vulnerability and a twelve-way final tie.
+- `node --test tests/acceptance/twelve-player.test.js` passed: twelve independent SDK clients, movement-driven warnings/falls, shared results/scores, capacity/recovery, host transfer and replay. This is local automation, not twelve humans.
+- `npm run test:browser` passed **all 14 Chrome/Edge cases** in 1.3 minutes. Coverage includes actual canvas enlargement, movement-triggered floors, elimination/recovery, shared scores and host replay, twelve numbered characters, full-browser reopen, duplicate-tab protection, startup cancellation and server restart. Chrome touch emulation verifies release/cancel/rotation, portrait at 390×844 and 320×568, and landscape at 844×390 and 568×320. Screenshots were visually inspected; emulation is not physical-phone acceptance.
+
+The first browser pass caught stale Phaser parent-size caching on phase changes and a crowded twelve-player landscape lobby banner. The renderer now measures its parent before refreshing FIT scaling; lobby spacing/banner were adjusted. Edge labels are kept inside the canvas. Browser tests assert actual canvas enlargement and visible touch controls, including narrow portrait and short landscape dimensions.
+
+No production build, production suite, public deployment, new physical-phone run or remote-person test was performed for this change. Existing production tests were adapted, but require a fresh authorized build before execution. Human playtesting should tune the 1.8-second warning and assess two-player/twelve-player route variety.
+
+
 ## September 19, 2026 — twelve-player foundation
 
 The owner expanded the shared party maximum to **twelve**, for the current game and future minigames. Admission and reserved-seat limits now use twelve; every occupied seat has a distinct color and stable number. The current game has twelve separated starting positions, a four-column/three-row lobby, compact phone rosters, prominent local identity and wrapped result awards. The two-square finale and two-minute recovery remain intact.

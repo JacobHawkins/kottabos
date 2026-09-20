@@ -26,7 +26,7 @@ export function validateName(value) {
 }
 
 // Capture trusted server configuration, never merge it with client join options.
-export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, countdownMs, roundDurationMs, maxRooms = 4, log }) {
+export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, countdownMs, maxRooms = 4, log }) {
   return class PartyRoom extends Room {
     onCreate(options) {
       // Check and reserve synchronously so concurrent matchmaking requests
@@ -47,12 +47,9 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.roundGame = null;
       this.awardedRound = 0;
       this.state.tiles.push(...Array(ARENA.columns * ARENA.rows).fill(TILE_SAFE));
+      this.state.tileGoneAtMs.push(...Array(ARENA.columns * ARENA.rows).fill(0));
       this.patchRate = 1000 / PATCH_HZ;
       this.maxMessagesPerSecond = 120;
-      this.onMessage('ready', (client, ready) => {
-        const player = this.playerFor(client);
-        if (player && this.state.phase === 'lobby' && typeof ready === 'boolean') player.ready = ready;
-      });
       this.onMessage('start', (client) => this.startRound(client));
       this.onMessage('replay', (client) => this.replay(client));
       this.onMessage('input', (client, input) => this.acceptInput(client, input));
@@ -111,7 +108,6 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       const player = this.playerFor(client);
       if (!player) return;
       player.connected = false;
-      player.ready = false;
       this.clearInputs(player.id);
       this.transferHost();
       const reservation = this.allowReconnection(client, reconnectionSeconds);
@@ -216,19 +212,18 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       const player = this.playerFor(client);
       if (!player || player.id !== this.state.hostId || this.state.phase !== 'lobby') return;
       const connected = Array.from(this.state.players.values()).filter((entry) => entry.connected);
-      if (connected.length < 2 || connected.some((entry) => !entry.ready)) {
-        client.send('notice', { message: 'At least two connected players must all be ready.' });
+      if (connected.length < 2) {
+        client.send('notice', { message: 'At least two connected players are needed to start.' });
         return;
       }
       this.state.round += 1;
       this.state.resultText = '';
       this.state.winnerIds.clear();
       for (const entry of this.state.players.values()) {
-        entry.ready = false;
         entry.roundPoints = 0;
         this.clearInputs(entry.id);
       }
-      this.roundGame = createRound(this.state, { seed: randomInt(0x7fffffff), durationMs: roundDurationMs });
+      this.roundGame = createRound(this.state);
       this.state.phase = 'countdown';
       this.state.phaseEndsAt = Date.now() + countdownMs;
       log('countdown', this.roomId, this.state.round);
@@ -241,9 +236,10 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.state.roundElapsedMs = 0;
       this.state.tiles.clear();
       this.state.tiles.push(...Array(ARENA.columns * ARENA.rows).fill(TILE_SAFE));
+      this.state.tileGoneAtMs.clear();
+      this.state.tileGoneAtMs.push(...Array(ARENA.columns * ARENA.rows).fill(0));
       this.roundGame = null;
       for (const player of this.state.players.values()) {
-        player.ready = false;
         player.alive = false;
         player.participating = false;
         this.clearInputs(player.id);
@@ -268,7 +264,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.state.tick += 1;
       if (this.state.phase === 'countdown' && now >= this.state.phaseEndsAt) {
         this.state.phase = 'playing';
-        this.state.phaseEndsAt = now + this.roundGame.durationMs;
+        this.state.phaseEndsAt = 0;
         log('playing', this.roomId, this.state.round);
       }
       if (this.state.phase !== 'playing') return;

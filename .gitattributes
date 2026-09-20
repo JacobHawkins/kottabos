@@ -1,0 +1,2 @@
+# Preserve the upstream attribution catalog exactly, including its whitespace.
+client/assets/character-credits.csv -text -whitespace

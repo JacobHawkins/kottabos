@@ -9,7 +9,6 @@ const server = await createProductionServer({
   maxRooms: Number(process.env.MAX_ROOMS || 4),
   reconnectionSeconds: Number(process.env.RECONNECT_SECONDS || 120),
   countdownMs: Number(process.env.COUNTDOWN_MS || 3000),
-  roundDurationMs: Number(process.env.ROUND_DURATION_MS || 45000),
 });
 let stopping = false;
 async function stop() {

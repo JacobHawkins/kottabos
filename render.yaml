@@ -1,5 +1,6 @@
 # Verify the $0 workspace condition in docs/deployment.md BEFORE applying.
-# Uses the authorized repository/branch containing this file.
+# Reproducible configuration for the existing service, not a second service.
+# The dashboard-created service needs its GitHub integration/settings configured separately.
 services:
   - type: web
     name: kottabos
@@ -7,7 +8,8 @@ services:
     plan: free
     numInstances: 1
     region: oregon
-    autoDeployTrigger: off
+    branch: main
+    autoDeployTrigger: checksPass
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start:prod
     healthCheckPath: /api/health
@@ -20,5 +22,3 @@ services:
         value: "120"
       - key: COUNTDOWN_MS
         value: "3000"
-      - key: ROUND_DURATION_MS
-        value: "45000"

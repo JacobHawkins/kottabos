@@ -4,13 +4,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
 import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../../server/app.js';
-import { ARENA, MAX_PLAYERS, STEP_MS, TILE_GONE, TILE_SAFE } from '../../shared/constants.js';
+import { ARENA, MAX_PLAYERS, STEP_MS, TILE_GONE, TILE_SAFE, TILE_WARNING, TILE_WARNING_MS } from '../../shared/constants.js';
 
 // Deliberately separate from npm test: this holds twelve real SDK sockets for
 // an entire round. PLAYTEST_URL runs the same bounded party against an explicitly
 // selected deployment; it does not create multiple parties or keep hosting awake.
 const remoteEndpoint = process.env.PLAYTEST_URL?.replace(/\/$/, '');
-const localDurationMs = 20_000;
 
 async function until(predicate, message, timeout = 12_000) {
   const deadline = Date.now() + timeout;
@@ -32,8 +31,7 @@ function nearestSafeDirection(state, player) {
   const previous = new Map([[tile, null]]);
   const queue = [tile];
   let target = tile;
-  // The controller sees only the same synchronized tile warnings as a player.
-  // In particular it cannot read the private future schedule or final choice.
+  // The controller navigates only the synchronized floor visible to players.
   for (const current of queue) {
     if (state.tiles[current] === TILE_SAFE) { target = current; break; }
     const column = current % columns;
@@ -65,7 +63,7 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     let endpoint = remoteEndpoint;
     if (!endpoint) {
       server = await createAppServer({ port: Number(process.env.TWELVE_PLAYER_TEST_PORT || 2584),
-        countdownMs: 500, roundDurationMs: localDurationMs, log: false });
+        countdownMs: 500, log: false });
       await server.listen();
       endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
     }
@@ -161,17 +159,18 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     await until(() => players.every(({ room }) => [...room.state.players.values()].every(({ connected }) => connected)),
       'all clients observe twelve connected players after recovery');
 
-    for (const { room } of players) room.send('ready', true);
-    await until(() => [...host.room.state.players.values()].every(({ ready }) => ready), 'all twelve ready messages are accepted');
     host.room.send('start');
-    await until(() => host.room.state.phase === 'countdown', 'twelve ready players enter countdown');
+    await until(() => host.room.state.phase === 'countdown', 'the host starts all twelve connected players');
     const startingPositions = new Map([...host.room.state.players].map(([id, player]) => [id, { x: player.x, y: player.y }]));
     assert.equal(new Set([...startingPositions.values()].map(({ x, y }) => `${x},${y}`)).size, 12, 'all twelve spawns are distinct');
     assert.ok([...host.room.state.players.values()].every(({ alive, participating }) => alive && participating));
     await until(() => players.every(({ room }) => room.state.phase === 'playing'), 'all twelve clients enter the same round');
     const startedAt = performance.now();
-    const expectedDuration = remoteEndpoint ? host.room.state.phaseEndsAt - host.room.state.serverTime : localDurationMs;
-    assert.ok(expectedDuration >= 15_000, 'the test runs a complete normal-length shrinking pattern');
+    assert.equal(host.room.state.phaseEndsAt, 0, 'playing has no global deadline');
+    assert.equal([...host.room.state.tiles].filter((tile) => tile === TILE_WARNING).length, 12,
+      'each occupied spawn starts its floor countdown');
+    assert.equal([...host.room.state.tiles].filter((tile) => tile === TILE_SAFE).length, ARENA.columns * ARENA.rows - 12,
+      'unvisited tiles stay intact');
     for (let step = 0; step < 8; step += 1) {
       for (const player of players) {
         const position = player.room.state.players.get(player.id);
@@ -185,18 +184,20 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
       return player.lastInputSeq > 0 && Math.hypot(player.x - start.x, player.y - start.y) > 5;
     }), 'each of the twelve players moves authoritatively and is visible to the host');
 
-    let sawTwoSafe = false;
-    let sawFinalWarning = false;
-    let sawOneSafe = false;
+    let sawGone = false;
+    const activatedDeadlines = new Map();
     let nextPingAt = 0;
     controller = (async () => {
       while (!stopController && host.room.state.phase === 'playing') {
         const state = host.room.state;
-        const safe = [...state.tiles].filter((tile) => tile === TILE_SAFE).length;
-        const remaining = [...state.tiles].filter((tile) => tile !== TILE_GONE).length;
-        sawTwoSafe ||= remaining === 2 && safe === 2;
-        sawFinalWarning ||= remaining === 2 && safe === 1;
-        sawOneSafe ||= remaining === 1 && safe === 1;
+        sawGone ||= [...state.tiles].some((tile) => tile === TILE_GONE);
+        for (let tile = 0; tile < state.tileGoneAtMs.length; tile += 1) {
+          const goneAt = state.tileGoneAtMs[tile];
+          if (!goneAt) continue;
+          if (activatedDeadlines.has(tile)) {
+            assert.equal(goneAt, activatedDeadlines.get(tile), 'stepping back onto a tile cannot restart its timer');
+          } else activatedDeadlines.set(tile, goneAt);
+        }
         stepTimes.push(state.stepMs);
         const pingNow = performance.now() >= nextPingAt;
         if (pingNow) nextPingAt = performance.now() + 1_000;
@@ -212,12 +213,17 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     })();
     await until(() => players.every(({ room }) => room.state.phase === 'results'), 'all twelve clients receive results', 65_000);
     await controller;
-    assert.ok(sawTwoSafe && sawFinalWarning && sawOneSafe, 'twelve-player round reaches the entire two-square finale');
-    assert.ok(host.room.state.roundElapsedMs >= expectedDuration - 250, 'the round runs through its deadline');
+    assert.ok(sawGone, 'occupied tiles disappear during the round');
+    assert.ok(activatedDeadlines.size > MAX_PLAYERS, 'movement arms floor beyond the initial twelve spawns');
+    assert.ok(host.room.state.roundElapsedMs >= TILE_WARNING_MS, 'players receive the full initial floor countdown');
     const expectedScores = scores(host.room);
     const expectedWinners = [...host.room.state.winnerIds];
-    assert.ok(expectedWinners.length >= 2, 'multiple input-driven survivors share the completed round');
+    assert.ok(expectedWinners.length >= 1, 'the player-driven round has a winner or simultaneous final fall');
     assert.ok(expectedScores.some(({ score }) => score > 0));
+    for (const { id, roundPoints } of expectedScores) {
+      assert.equal(roundPoints, expectedWinners.includes(id) ? (expectedWinners.length === 1 ? 3 : 1) : 0,
+        'only the final survivor or simultaneous last fall receives points');
+    }
     for (const { room } of players) {
       assert.deepEqual(scores(room), expectedScores, 'all twelve clients agree on cumulative scores');
       assert.deepEqual([...room.state.winnerIds], expectedWinners);
@@ -236,6 +242,8 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     for (const { room } of players) {
       assert.deepEqual(scores(room), expectedScores, 'replay preserves cumulative scores');
       assert.equal(room.state.players.size, 12);
+      assert.ok([...room.state.tiles].every((tile) => tile === TILE_SAFE));
+      assert.ok([...room.state.tileGoneAtMs].every((deadline) => deadline === 0));
     }
     await host.room.leave();
     await until(() => players.slice(1).every(({ room }) => room.state.players.size === 11 && room.state.hostId === players[1].id),
@@ -245,8 +253,6 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     players[0] = replacement;
     await until(() => players.every(({ room }) => room.state.players.size === 12), 'the released twelfth seat can be filled');
     assert.equal(replacement.room.state.hostId, players[1].id, 'joining does not steal host controls');
-    for (const { room } of players) room.send('ready', true);
-    await until(() => [...players[1].room.state.players.values()].every(({ ready }) => ready), 'the full replacement roster can ready again');
     players[1].room.send('start');
     await until(() => players.every(({ room }) => room.state.round === 2 && room.state.phase === 'countdown'),
       'the transferred host can start the next twelve-player round');

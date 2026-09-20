@@ -6,13 +6,15 @@ Actual iPhone and another person's remote-network tests remain manual acceptance
 
 ## Invite and play
 
-Open the deployed HTTPS URL, enter a nickname and create a party for **2–12 players**. Copy its invitation link and share it yourself. Friends open that link on their phones/computers, enter nicknames and join. Each browser profile/device is a distinct player. Open only one active game tab per profile. Everyone presses Ready; the host presses Start. Find your number/color in the roster; your character also has a white ring and YOU label. Numbers stay the same through refresh/recovery, and a dropped player's seat counts toward twelve until released or expired.
+Open the deployed HTTPS URL, enter a nickname and create a party for **2–12 players**. Copy its invitation link and share it yourself. Friends open that link on their phones/computers, enter nicknames and join. Each browser profile/device is a distinct player. Open only one active game tab per profile. The host presses Start once at least two players are connected; there is no ready check. Find your number/color in the roster; your character also has a white ring and YOU label. Numbers stay the same through refresh/recovery, and a dropped player's seat counts toward twelve until released or expired.
 
-Use WASD/arrows on a computer. On a phone, drag the thumb control and release to stop. Use the Touch controls toggle if detection is wrong. Portrait and landscape are supported without fullscreen. Keep track of amber warning tiles: they disappear after 1.8 seconds. Near the end, two adjacent squares remain safe for 2.5 seconds. One is randomly chosen to warn and fall; cross onto the other before it disappears. The pair's location/orientation and earlier waves vary each round. Players may still share the last square and tie. The host chooses Play again; scores carry forward.
+Use WASD/arrows on a computer. On a phone, drag the thumb control and release to stop. Use the Touch controls toggle if detection is wrong. Portrait and landscape are supported without fullscreen. Every tile under a living player starts a 1.8-second warning, then falls. Leaving or revisiting never resets it. Keep moving onto unused tiles; there is no random pattern, safe final island or round deadline. A lone survivor earns three points; simultaneous final fallers tie for one each. The arena expands during play. The host chooses Play again; scores carry forward.
 
 The server settles positions, falls, winners and scores. Your own player is predicted locally; other players are interpolated with 100 ms display delay in addition to network travel. Slight screen differences do not create multiple game outcomes. Test feel on the actual route before judging fairness solely from one screen.
 
 The original host keeps controls through later joins. Refreshing, losing connection or leaving transfers controls to the earliest remaining connected player; returning does not take them back. The current host is named on screen.
+
+These player-triggered floors, character visuals and expanded round layout are local changes pending a new deployment and human playtest. Earlier hosted acceptance does not verify them.
 
 ## Acceptance sheet (owner fills in)
 
@@ -21,7 +23,7 @@ Record date, service revision/region, phone model, iOS version, browser, approxi
 | Check | Evidence / pass / defect |
 | --- | --- |
 | First visit after >15 minutes idle | Provider loading screen and elapsed wait; client wait/cancel feedback once loaded |
-| Portrait and landscape | Arena, thumb control, ready/start/replay, scores and nickname keyboard usable |
+| Portrait and landscape | Arena, thumb control, host start/replay, scores and nickname keyboard usable |
 | Movement and stopping | Release outside control, extra finger, canceled gesture, rotation; no stuck movement |
 | Shared loop | Everyone sees same floor, elimination, results, cumulative score and replay |
 | Full twelve-person party | Distinct numbers/colors, readable phone roster, 12 starting positions, thirteenth join refused |

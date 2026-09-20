@@ -24,5 +24,4 @@ export const PLAYER_COLORS = Object.freeze([
 export const TILE_SAFE = 0;
 export const TILE_WARNING = 1;
 export const TILE_GONE = 2;
-export const ROUND_DURATION_MS = 45_000;
 export const TILE_WARNING_MS = 1_800;
