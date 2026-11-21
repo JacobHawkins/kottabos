@@ -1,9 +1,13 @@
 import { PartySession, claimBrowserTab } from './session.js';
 import { Controls } from './controls.js';
+import { MINIGAMES, MAP_CHOICES, SESSION_CHOICES } from '../shared/party.js';
+import { setupMusic } from './music.js';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../shared/constants.js';
 import characterCreditsUrl from './assets/character-credits.csv?url';
 
 const $ = (id) => document.getElementById(id);
+const music = setupMusic($('party-audio'), $('music-mute'), $('music-volume'), $('music-status'));
+const mapLabels = { small: 'Small · 25 tiles', large: 'Large · 98 tiles', shaped: 'Random shape' };
 $('character-credits').href = characterCreditsUrl;
 $('player-count').textContent = `0 / ${MAX_PLAYERS}`;
 if (import.meta.env.DEV) {
@@ -48,6 +52,12 @@ async function ensureGame() {
 }
 
 function reset() {
+  music('');
+  $('manage-panel').hidePopover();
+  $('music-panel').hidePopover();
+  $('music-button').hidden = true;
+  $('manage-party').hidden = true;
+  $('skin-choice').removeAttribute('data-locked');
   controls?.clear();
   game?.destroy();
   game = null;
@@ -63,8 +73,8 @@ function renderRoster(state) {
   const players = Object.values(state.players);
   $('party').dataset.phase = state.phase;
   // Do not replace buttons or roster nodes for every movement patch.
-  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints }) =>
-    ({ id, name, color, connected, score, alive, participating, roundPoints }))) + state.hostId + state.phase + session.playerId;
+  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints, sessionPoints }) =>
+    [id, name, color, connected, score, alive, participating, roundPoints, sessionPoints])) + state.hostId + state.phase + session.playerId;
   if (key === lastRoster) return;
   lastRoster = key;
   const rows = players.map((player) => {
@@ -84,9 +94,10 @@ function renderRoster(state) {
     name.textContent = player.name + (player.id === session.playerId ? ' (you)' : '');
     const status = document.createElement('div');
     status.className = 'player-state';
-    status.textContent = !player.connected ? 'RECONNECTING · SEAT HELD' : state.phase === 'lobby' ? 'IN THE PARTY'
+    status.textContent = !player.connected ? 'RECONNECTING · SEAT HELD' : ['lobby', 'lengthVote'].includes(state.phase) ? 'IN THE PARTY'
       : !player.participating ? 'SPECTATING · NEXT ROUND' : player.alive ? 'STILL STANDING' : 'ELIMINATED · SPECTATING';
     if (player.id === state.hostId) status.textContent += ' · HOST';
+    if (state.sessionRound && state.phase !== 'lobby') status.textContent += ` · ${player.sessionPoints} SESSION PTS`;
     info.append(name, status);
     const score = document.createElement('div');
     score.className = 'player-score';
@@ -98,6 +109,18 @@ function renderRoster(state) {
     return row;
   });
   $('players-list').replaceChildren(...rows);
+  $('kick-list').replaceChildren(...players.filter(p => p.id !== session.playerId).map(p => {
+    const row = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = p.name + (p.connected ? '' : ' (reserved)');
+    const kick = document.createElement('button');
+    kick.className = 'secondary';
+    kick.textContent = 'Kick';
+    kick.setAttribute('aria-label', `Kick ${p.name}`);
+    kick.onclick = () => session.send('kick', p.id);
+    row.append(name, kick);
+    return row;
+  }));
   $('player-count').textContent = `${players.length} / ${MAX_PLAYERS}`;
   const awards = players.filter((player) => player.roundPoints > 0).map((player) => {
     const award = document.createElement('span');
@@ -108,10 +131,63 @@ function renderRoster(state) {
   $('results-detail').replaceChildren(...(awards.length ? awards : ['No points awarded this round.']));
 }
 
+function renderOptions(state, me, host, online) {
+  const lobby = state.phase === 'lobby';
+  $('lobby-settings').hidden = !lobby;
+  if (!lobby) $('skin-choice').removeAttribute('data-locked');
+  if (lobby && me && $('skin-choice').dataset.locked !== me.skin) {
+    $('skin-choice').value = me.skin;
+    $('skin-choice').dataset.locked = me.skin;
+  }
+  $('skin-choice').disabled = !online;
+  const locked = $('skin-choice').value === me?.skin;
+  $('lock-skin').disabled = locked || !online;
+  $('lock-skin').textContent = locked ? 'Locked in' : 'Lock in';
+  $('game-choices').hidden = !host;
+  for (const option of $('game-choices').querySelectorAll('input')) {
+    option.checked = state.selectedGames.includes(option.value);
+    option.disabled = !online || (option.checked && state.selectedGames.length === 1);
+  }
+  $('manage-party').hidden = !host;
+  $('manage-party').disabled = !online;
+  if (!online || !host) $('manage-panel').hidePopover();
+  const vote = state.phase === 'lengthVote' || state.phase === 'mapVote';
+  const openingVote = vote && $('vote-panel').hidden;
+  $('vote-panel').hidden = !vote;
+  if (!vote) return;
+  const lengthVote = state.phase === 'lengthVote';
+  const choices = lengthVote ? SESSION_CHOICES : MAP_CHOICES;
+  $('vote-title').textContent = lengthVote ? 'How many rounds?' : 'Pick the next map';
+  $('vote-hint').textContent = lengthVote ? 'Five seconds to vote. No votes starts a single round.'
+    : state.resultText + ' · No votes keeps the classic board.';
+  if ($('vote-options').dataset.phase !== state.phase) {
+    $('vote-options').dataset.phase = state.phase;
+    $('vote-options').replaceChildren(...choices.map(choice => {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.dataset.choice = choice;
+      button.onclick = () => session.send('vote', { phase: session.state.phase, round: session.state.round, choice });
+      return button;
+    }));
+  }
+  for (const button of $('vote-options').children) {
+    const choice = button.dataset.choice;
+    const count = Object.values(state.players).filter(p => p.vote === choice).length;
+    const label = lengthVote ? choice + (choice === '1' ? ' round' : ' rounds') : mapLabels[choice];
+    const text = `${label} (${count})`;
+    if (button.textContent !== text) button.textContent = text;
+    button.setAttribute('aria-pressed', String(me?.vote === choice));
+    button.disabled = !online;
+  }
+  if (openingVote) $('vote-panel').scrollIntoView({ block: 'nearest' });
+}
+
 function render(state) {
   $('home').hidden = true;
   $('party').hidden = false;
   $('leave-button').hidden = false;
+  $('music-button').hidden = false;
+  music(state.phase);
   document.body.classList.toggle('is-playing', ['countdown', 'playing'].includes(state.phase));
   ensureGame();
   const me = state.players[session.playerId];
@@ -122,8 +198,11 @@ function render(state) {
   $('host-label').textContent = `Host: ${state.players[state.hostId]?.name || 'waiting for a player'}`;
   $('invite-link').value = `${location.origin}/?room=${state.code}`;
   $('room-code').value = state.code;
-  $('round-label').textContent = `STAY ON THE PLATFORM${state.round ? ` / ROUND ${String(state.round).padStart(2, '0')}` : ''}`;
-  $('phase-label').textContent = { lobby: 'The gathering place.', countdown: 'Find your footing.', playing: 'Stay on the Platform', results: 'That was a close one.' }[state.phase] || state.phase;
+  renderOptions(state, me, host, online);
+  const active = state.sessionRound && state.phase !== 'lobby';
+  $('round-label').textContent = active ? `Round ${state.sessionRound} of ${state.sessionLength} · ${state.mapName}` : 'Party lobby';
+  $('phase-label').textContent = { lobby: 'The gathering place.', lengthVote: 'Session vote', mapVote: 'Map vote',
+    waiting: 'Waiting for players', countdown: 'Find your footing.', playing: MINIGAMES[state.gameId], results: 'Session results' }[state.phase];
   $('phase-label').dataset.phase = state.phase;
   $('start-button').hidden = !host || state.phase !== 'lobby';
   const connected = players.filter((player) => player.connected);
@@ -131,11 +210,14 @@ function render(state) {
   $('replay-button').hidden = !host || state.phase !== 'results';
   $('replay-button').disabled = !online;
   $('lobby-hint').textContent = !online ? 'Reconnecting automatically. Your character still faces the falling floor.' : state.phase === 'lobby'
-    ? connected.length < 2 ? 'Invite another player to get started.' : host ? 'Your party is here. Start whenever you like.' : 'Your host will start the round.'
-    : state.phase === 'results' ? host ? 'Back to the lobby for another round. Scores carry over.' : 'Your host can bring everyone back for another round.'
+    ? connected.length < 2 ? 'Explore the lobby and invite another player.' : host ? 'Begin the session to open the round vote.' : 'Explore the lobby while the host gets started.'
+    : state.phase === 'results' ? 'Return to the lobby for another session. Party scores carry over.'
+      : state.phase === 'waiting' ? 'The session resumes when two players are connected.'
+      : ['lengthVote', 'mapVote'].includes(state.phase) ? 'Everyone can vote. Tied votes are decided at random.'
       : me?.participating && me.alive ? 'Make every tile count.' : 'You’re spectating. You can play in the next round.';
   $('results-panel').hidden = state.phase !== 'results';
   $('result-text').textContent = state.resultText;
+  $('session-result').textContent = state.sessionResult;
   $('player-mode').textContent = me?.participating && !me.alive ? 'SPECTATING' : state.phase === 'playing' && !me?.participating ? 'NEXT ROUND IS YOURS' : 'YOU’VE GOT THIS';
   if (import.meta.env.DEV) $('simulate-drop').disabled = !online;
   renderRoster(state);
@@ -148,14 +230,15 @@ function renderClock() {
   const seconds = Math.max(0, Math.ceil((state.phaseEndsAt - (Date.now() + clockOffset)) / 1000));
   const survivors = Object.values(state.players).filter((player) => player.participating && player.alive).length;
   $('timer-value').textContent = state.phase === 'playing' ? String(survivors).padStart(2, '0')
-    : state.phase === 'countdown' ? String(seconds).padStart(2, '0') : '—';
-  $('timer-label').textContent = state.phase === 'playing' ? 'STILL STANDING' : state.phase === 'countdown' ? 'STARTING IN' : 'HOST STARTS THE ROUND';
+    : state.phaseEndsAt ? String(seconds).padStart(2, '0') : '—';
+  $('timer-label').textContent = state.phase === 'playing' ? 'STILL STANDING' : state.phase === 'countdown' ? 'STARTING IN'
+    : state.phaseEndsAt ? 'VOTE CLOSES IN' : state.phase === 'lobby' ? 'WAITING FOR HOST' : '';
   const me = state.players[session.playerId];
   const banner = $('stage-banner');
   banner.classList.toggle('countdown', state.phase === 'countdown' && session.connection === 'connected');
-  banner.hidden = state.phase === 'playing' && me?.alive && session.connection === 'connected';
+  banner.hidden = session.connection === 'connected' && (['lobby', 'lengthVote', 'mapVote', 'results'].includes(state.phase) || state.phase === 'playing' && me?.alive);
   banner.firstElementChild.textContent = session.connection !== 'connected' ? 'Reconnecting… your spot is reserved'
-    : state.phase === 'lobby' ? 'Host starts the round'
+    : state.phase === 'waiting' ? 'Waiting for two connected players'
       : state.phase === 'countdown' ? Math.max(1, seconds)
         : state.phase === 'results' ? 'One more round?'
           : me?.participating ? 'You fell! Watch the survivors, then try again.' : 'You’re spectating. Join the next round.';
@@ -186,6 +269,17 @@ if (tabClaim === 'claimed') {
     onReset: reset,
   });
   controls = new Controls(session, { joystick: $('joystick'), toggle: $('touch-toggle'), panel: $('touch-controls'), hint: $('touch-hint') });
+  $('skin-choice').onchange = () => render(session.state);
+  $('lock-skin').onclick = () => session.send('skin', $('skin-choice').value);
+  for (const [id, title] of Object.entries(MINIGAMES)) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = id;
+    input.onchange = () => session.send('games', [...$('game-choices').querySelectorAll('input:checked')].map(el => el.value));
+    label.append(input, title);
+    $('game-choices').append(label);
+  }
   $('home').hidden = false;
   session.status('idle', 'Ready when you are');
   $('create-party').addEventListener('click', () => join(true));

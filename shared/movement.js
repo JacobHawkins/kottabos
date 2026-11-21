@@ -12,22 +12,26 @@ export function normalizeInput(input = {}) {
   return { x, y };
 }
 
-export function movePlayer(position, input, dtSeconds) {
+export function movePlayer(position, input, dtSeconds, arena = ARENA) {
   const direction = normalizeInput(input);
   const distance = PLAYER_SPEED * (Number.isFinite(dtSeconds) ? Math.max(0, dtSeconds) : 0);
   // The player's center decides which tile supports them; the arena edge is solid.
   return {
-    x: Math.max(0.01, Math.min(ARENA.width - 0.01, position.x + direction.x * distance)),
-    y: Math.max(0.01, Math.min(ARENA.height - 0.01, position.y + direction.y * distance)),
+    x: Math.max(0.01, Math.min(arena.width - 0.01, position.x + direction.x * distance)),
+    y: Math.max(0.01, Math.min(arena.height - 0.01, position.y + direction.y * distance)),
   };
 }
 
 export function tileIndexAt(position) {
+  return tileIndexInArena(position, ARENA);
+}
+
+export function tileIndexInArena(position, arena) {
   if (!Number.isFinite(position.x) || !Number.isFinite(position.y)
-    || position.x < 0 || position.y < 0 || position.x >= ARENA.width || position.y >= ARENA.height) {
+    || position.x < 0 || position.y < 0 || position.x >= arena.width || position.y >= arena.height) {
     return -1;
   }
-  return Math.floor(position.y / ARENA.tileSize) * ARENA.columns
-    + Math.floor(position.x / ARENA.tileSize);
+  return Math.floor(position.y / arena.tileSize) * arena.columns
+    + Math.floor(position.x / arena.tileSize);
 }
 

@@ -11,6 +11,7 @@ export async function createAppServer({
   host = '127.0.0.1',
   reconnectionSeconds = 120,
   countdownMs = 3000,
+  voteMs,
   maxRooms = 4,
   allowedOrigin = '',
   requestLimits,
@@ -69,7 +70,7 @@ export async function createAppServer({
     devMode: false,
   });
   gameServer.define('party', createPartyRoomClass({
-    rooms, instanceId, reconnectionSeconds, countdownMs, maxRooms, log: log || (() => {}),
+    rooms, instanceId, reconnectionSeconds, countdownMs, voteMs, maxRooms, log: log || (() => {}),
   }));
   let closed = false;
   return {

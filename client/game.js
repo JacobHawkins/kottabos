@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import characterSheetUrl from './assets/character-spritesheet.png?url';
 import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE, TILE_WARNING_MS } from '../shared/constants.js';
+import { arenaFor } from '../shared/arena.js';
 
 const PADDING = 50;
 const SIZE = ARENA.width + PADDING * 2;
@@ -13,13 +14,18 @@ const CHARACTER_ROWS = { up: { walk: 8, idle: 22 }, left: { walk: 9, idle: 23 },
   down: { walk: 10, idle: 24 }, right: { walk: 11, idle: 25 } };
 const frameAt = (row, column = 0) => row * 13 + column;
 
-function createCharacter(scene, color, number) {
+function createCharacter(scene, color, number, skin) {
   const shadow = scene.add.ellipse(0, 4, 36, 15, 0x112e31, .45);
   const marker = scene.add.ellipse(0, 3, 34, 12, color);
   const ring = scene.add.ellipse(0, 3, 42, 18).setStrokeStyle(2, 0xecffe9, .95);
   // Anchor the feet, not the texture's empty center, to the gameplay position.
   const sprite = scene.add.sprite(0, 0, CHARACTER_TEXTURE, frameAt(CHARACTER_ROWS.down.idle))
     .setOrigin(.5, 62 / 64).setScale(.75);
+  sprite.setVisible(skin === 'sprite');
+  const shape = scene.add.graphics().fillStyle(color).lineStyle(2, 0x102331);
+  if (skin === 'circle') shape.fillCircle(0, -10, 13).strokeCircle(0, -10, 13);
+  if (skin === 'square') shape.fillRect(-12, -22, 24, 24).strokeRect(-12, -22, 24, 24);
+  if (skin === 'triangle') shape.fillTriangle(0, -25, -15, 2, 15, 2).strokeTriangle(0, -25, -15, 2, 15, 2);
   const badge = scene.add.text(0, 13, number, {
     fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#102936',
     backgroundColor: `#${color.toString(16).padStart(6, '0')}`, padding: { x: 3, y: 1 },
@@ -28,8 +34,8 @@ function createCharacter(scene, color, number) {
     fontFamily: 'monospace', fontSize: '10px', color: '#fffce8',
     backgroundColor: '#102331', padding: { x: 5, y: 3 },
   }).setOrigin(.5);
-  const container = scene.add.container(0, 0, [shadow, marker, ring, sprite, badge, label]);
-  return { container, label, ring, sprite, number, facing: 'down', moving: false,
+  const container = scene.add.container(0, 0, [shadow, marker, ring, sprite, shape, badge, label]);
+  return { container, label, ring, sprite, number, skin, facing: 'down', moving: false,
     previous: null, round: null, phase: null, wasAlive: null };
 }
 
@@ -60,7 +66,7 @@ export function createGame(session, controls) {
 
     capture(state) {
       if (!this.board) return;
-      const sample = { time: performance.now(), round: state.round, players: {} };
+      const sample = { time: performance.now(), phase: state.phase, round: state.round, players: {} };
       for (const player of Object.values(state.players)) sample.players[player.id] = { x: player.x, y: player.y };
       this.samples.push(sample);
       if (this.samples.length > 12) this.samples.shift();
@@ -68,7 +74,8 @@ export function createGame(session, controls) {
 
     remotePosition(player, now) {
       const target = now - 100;
-      const samples = this.samples.filter((sample) => sample.round === session.state.round && sample.players[player.id]);
+      const samples = this.samples.filter((sample) => sample.round === session.state.round &&
+        sample.phase === session.state.phase && sample.players[player.id]);
       let before = samples[0];
       let after = samples.at(-1);
       for (const sample of samples) {
@@ -87,15 +94,22 @@ export function createGame(session, controls) {
       const state = session.state;
       if (!state) { this.board?.clear(); return; }
       const graphics = this.board;
+      const arena = arenaFor(state);
+      if (this.scale.width !== arena.width + PADDING * 2 || this.scale.height !== arena.height + PADDING * 2) {
+        this.scale.resize(arena.width + PADDING * 2, arena.height + PADDING * 2);
+      }
       graphics.clear();
       graphics.fillStyle(0x081722, 0.5);
-      graphics.fillRoundedRect(PADDING - 9, PADDING + 10, ARENA.width + 18, ARENA.height + 12, 10);
+      graphics.fillRoundedRect(PADDING - 9, PADDING + 10, arena.width + 18, arena.height + 12, 10);
       const warningPulse = (Math.sin(time / 190) + 1) / 2;
       for (let index = 0; index < state.tiles.length; index++) {
-        const x = PADDING + (index % ARENA.columns) * ARENA.tileSize;
-        const y = PADDING + Math.floor(index / ARENA.columns) * ARENA.tileSize;
+        const col = index % arena.columns;
+        const row = Math.floor(index / arena.columns);
+        const x = PADDING + col * arena.tileSize;
+        const y = PADDING + row * arena.tileSize;
         const tile = state.tiles[index];
         if (tile === TILE_GONE) {
+          if (!state.tileGoneAtMs[index]) continue;
           graphics.fillStyle(0x0c1b27);
           graphics.fillRoundedRect(x + 3, y + 3, 58, 58, 5);
           graphics.lineStyle(1, 0x27414c, 0.65);
@@ -107,7 +121,7 @@ export function createGame(session, controls) {
         const warning = tile === TILE_WARNING;
         graphics.fillStyle(warning ? 0x99703d : 0x345951);
         graphics.fillRoundedRect(x + 2, y + 7, 60, 55, 5);
-        graphics.fillStyle(warning ? (warningPulse > .5 ? 0xf2be73 : 0xd79b55) : ((index + Math.floor(index / 7)) % 2 ? 0x648b7c : 0x6d9687));
+        graphics.fillStyle(warning ? (warningPulse > .5 ? 0xf2be73 : 0xd79b55) : ((col + row) % 2 ? 0x648b7c : 0x6d9687));
         graphics.fillRoundedRect(x + 2, y + 2, 60, 55, 5);
         graphics.lineStyle(1, warning ? 0xffd79a : 0xa5c7a8, warning ? .85 : .3);
         graphics.strokeRoundedRect(x + 3, y + 3, 58, 52, 4);
@@ -134,11 +148,12 @@ export function createGame(session, controls) {
         const local = player.id === session.playerId;
         const seat = Math.max(0, PLAYER_COLORS.indexOf(player.color));
         const number = String(seat + 1).padStart(2, '0');
-        if (!character) {
-          character = createCharacter(this, toColor(player.color), number);
+        if (!character || character.skin !== player.skin) {
+          character?.container.destroy();
+          character = createCharacter(this, toColor(player.color), number, player.skin);
           this.characters.set(player.id, character);
         }
-        const lobby = state.phase === 'lobby';
+        const lobby = state.phase === 'lobby' || state.phase === 'lengthVote' || state.phase === 'waiting' && !state.sessionRound;
         const shortName = [...player.name].length > 12 ? [...player.name].slice(0, 11).join('') + '…' : player.name;
         character.label.setText(local ? `${number} · YOU` : shortName);
         // Numbers remain visible without twelve overlapping name plates during play.
@@ -147,12 +162,11 @@ export function createGame(session, controls) {
         const visible = lobby || player.participating;
         character.container.setVisible(visible);
         if (!visible) return;
-        const position = lobby ? { x: 64 + seat % 4 * (ARENA.width - 128) / 3, y: 104 + Math.floor(seat / 4) * 112 }
-          : local ? (controls.position() || player) : this.remotePosition(player, performance.now());
+        const position = local ? (controls.position() || player) : this.remotePosition(player, performance.now());
         // Keep identity labels inside the canvas even against its top/side edges.
         const labelHalfWidth = character.label.width / 2 + 3;
         character.label.setPosition(
-          Math.max(labelHalfWidth - PADDING - position.x, Math.min(0, SIZE - labelHalfWidth - PADDING - position.x)),
+          Math.max(labelHalfWidth - PADDING - position.x, Math.min(0, this.scale.width - labelHalfWidth - PADDING - position.x)),
           position.y < 22 ? 33 : -49,
         );
         const resetPose = character.round !== state.round || character.phase !== state.phase;
@@ -161,7 +175,7 @@ export function createGame(session, controls) {
         // Local reconciliation can move a few pixels backwards. Face the held
         // input so corrections do not turn the sprite around after key release.
         const direction = local ? controls.direction() : { x: dx, y: dy };
-        character.moving = state.phase === 'playing' && player.alive && player.connected &&
+        character.moving = (state.phase === 'lobby' || state.phase === 'playing' && player.alive) && player.connected &&
           session.connection === 'connected' && Math.hypot(dx, dy) > .05 && Math.hypot(direction.x, direction.y) > .01;
         if (resetPose && (lobby || state.phase === 'countdown' || character.round !== state.round)) character.facing = 'down';
         if (character.moving) character.facing = Math.abs(direction.x) > Math.abs(direction.y)
@@ -183,7 +197,7 @@ export function createGame(session, controls) {
         character.phase = state.phase;
         character.wasAlive = player.alive;
         character.container.setPosition(PADDING + position.x, PADDING + position.y);
-        character.container.setDepth((local ? ARENA.height : 0) + position.y + 10);
+        character.container.setDepth((local ? arena.height : 0) + position.y + 10);
         character.container.setAlpha(!lobby && !player.alive ? .22 : player.connected ? 1 : .5);
         character.container.setScale(!lobby && !player.alive ? .7 : 1);
       });
@@ -218,6 +232,7 @@ export function createGame(session, controls) {
     get sceneCount() { return game.scene.scenes.length; },
     get renderedCharacters() { return scene ? Object.fromEntries([...scene.characters].map(([id, value]) => [id, {
       texture: value.sprite.texture.key, frame: value.sprite.frame.name, facing: value.facing, moving: value.moving,
+      skin: value.skin,
       visible: value.container.visible, alpha: value.container.alpha, number: value.number,
       animation: value.sprite.anims.currentAnim?.key || '', animating: value.sprite.anims.isPlaying,
     }])) : {}; },

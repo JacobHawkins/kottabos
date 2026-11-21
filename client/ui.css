@@ -81,3 +81,28 @@
 @media(max-height:360px) and (orientation:landscape){
   .is-playing #touch-hint{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 }
+.settings-panel { background:var(--panel); color:#eff5ef; border:1px solid var(--border); border-radius:14px; padding:22px; width:min(340px,calc(100vw - 32px)); max-height:75svh; }
+.settings-panel::backdrop { background:#07131b70; }
+.settings-panel h2,.vote-panel h2 { margin:0 0 14px; font-size:20px; }
+.settings-panel input[type=range] { padding:0; margin:8px 0 20px; accent-color:var(--mint); }
+#music-status:empty { display:none; }
+#kick-list li,.skin-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+#kick-list li { padding:5px 0; overflow-wrap:anywhere; }
+.skin-row select { min-width:0; flex:1; font:inherit; font-size:14px; padding:10px 6px; color:#eff5ef; background:#182c36; border:1px solid #52666a; border-radius:6px; }
+.skin-row button,#kick-list button { padding:10px 12px; }
+#game-choices { margin:16px 0 4px; border:1px solid var(--border); border-radius:8px; padding:10px; }
+#game-choices legend { color:var(--muted); font-size:12px; }
+#game-choices label { display:flex; gap:8px; align-items:center; margin:0; }
+#game-choices input { width:auto; accent-color:var(--mint); }
+.vote-panel { padding:16px; margin:0 0 14px; }
+.vote-panel h2 { margin-bottom:4px; }
+.vote-panel p { margin:0 0 12px; color:var(--muted); font-size:13px; }
+.vote-options { display:flex; flex-wrap:wrap; gap:7px; }
+.vote-options button { flex:1; min-height:44px; padding:8px; }
+.vote-options button[aria-pressed=true] { background:var(--mint); color:#133327; }
+@media(max-width:560px) {
+  .session-actions,.is-playing .session-actions { gap:2px; max-width:none; }
+  .session-actions .text-button { padding:9px 5px; }
+  body:has(#party:not([hidden])) .wordmark { font-size:0; gap:0; }
+  #party .players-list { grid-template-columns:minmax(0,1fr); }
+}
