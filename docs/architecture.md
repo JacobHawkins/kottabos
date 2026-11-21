@@ -91,15 +91,21 @@ Each simulation step activates occupied starting tiles, moves connected living p
 - If all remaining participants fall in the same simulation step, those final fallers tie for one point each. Earlier eliminated players receive none.
 - Spectators and permanently removed players receive no points. An empty round has no winner.
 
-The cached round outcome is awarded once per round number. Intermediate results open a map vote. The final result waits for the host to return the party to the lobby. The 1.8-second warning is initial tuning; real two-person and twelve-person play should assess pacing and route variety.
+The cached round outcome is awarded once per round number. Intermediate results advance to the next game. Tile rounds offer a map vote. The final result waits for the host to return the party to the lobby. The 1.8-second warning is initial tuning; real two-person and twelve-person play should assess pacing and route variety.
+
+## Jump Rope
+
+The server publishes the start and contact time of each swing on the round simulation clock. A jump lasts 560 ms and requires 740 ms between starts. At contact, the server samples the jump arc for every living participant, including disconnected identities. Feet below 42% of peak height take a ding. Three dings move the participant to a handle. Both games use the same last-standing rules to award points.
+
+The first revolution lasts 1.8 seconds. The natural period falls by 38 ms per elapsed second to a 100 ms floor. Each accepted pull multiplies future periods by 0.76, down to 40 ms. Pulls received during a swing leave its published contact time intact. The room accepts one pull per eliminated, connected participant per swing and checks the current round and swing on every action. The browser predicts its local jump arc and draws the rope against the same contact clock. The court, handles and score indicators are drawn in the existing Phaser scene.
 
 ## Sessions, votes and game selection
 
-The host selects a nonempty set from the minigame list in the lobby. Round selection cycles through that list in order. To add a minigame, add its title to `shared/party.js`, register its round creation and update functions in `server/minigames/index.js`, and supply its browser presentation. Stay on the Platform is the first entry. The party owns timers, moderation, ballots and scores.
+The host selects a nonempty set from the minigame list in the lobby. Round selection cycles through that list in order. To add a minigame, add its title to `shared/party.js`, register its round creation and update functions in `server/minigames/index.js`, and supply its browser presentation. Stay on the Platform is the default. Jump Rope registers a single-action handler and uses its own court. The party owns timers, moderation, ballots and scores.
 
 The room opens a five-second length vote, then captures connected players at the countdown for round one. A ballot belongs to a player identity and the current phase and round. Guests may revise their choice before the deadline. Disconnect/rejoin preserves the ballot. Leaving or being kicked removes it. Highest count wins, and the server draws uniformly among tied leaders. Empty length and map votes choose one round and Classic respectively.
 
-Between rounds, a five-second map vote precedes a three-second countdown. Small has 25 tiles, Large has 98, and the shape option draws Diamond, Cross, Ring, Hourglass or Steps. Shaped maps start with holes. The server allocates distinct spawns on intact tiles and sends dimensions, floor and deadlines to all clients. If fewer than two players are connected when voting closes, the room waits for a join or recovery before the next countdown.
+When a later round uses tiles, a five-second map vote precedes the three-second countdown. Upcoming rope rounds go directly to their countdown. Small has 25 tiles, Large has 98, and the shape option draws Diamond, Cross, Ring, Hourglass or Steps. Shaped maps start with holes. The server allocates distinct spawns on intact tiles and sends dimensions, floor and deadlines to all clients. If fewer than two players are connected when voting closes, the room waits for a join or recovery before the next countdown.
 
 Session points start at zero at the opening vote. A round award increments the player's session and party totals once. Highest session score among remaining members wins, with shared first place on a tie. Final results persist through reconnection. Host kicks also cancel reserved seats. The released identity cannot recover, and the invitation code still admits a fresh player when there is room.
 

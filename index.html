@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#101e29" />
     <link rel="stylesheet" href="/client/ui.css" />
-    <meta name="description" content="A little friendly chaos. A disappearing floor. Stay on the Platform with 2–12 players on phones or computers." />
+    <meta name="description" content="A little friendly chaos. Play Stay on the Platform and Jump Rope with 2–12 players on phones or computers." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%239febc6'/%3E%3Cpath d='M18 14v36m28-36L20 32l28 18' stroke='%23101e29' stroke-width='8' fill='none'/%3E%3C/svg%3E" />
     <title>Kottabos · A little friendly chaos</title>
   </head>
   <body>
     <div class="shell">
       <header class="masthead">
-        <a class="wordmark" href="/" aria-label="Kottabos home"><span class="brand-mark">k</span> kottabos<span class="edition">YOUR PEOPLE / ONE FLOOR</span></a>
+        <a class="wordmark" href="/" aria-label="Kottabos home"><span class="brand-mark">k</span> kottabos<span class="edition">YOUR PEOPLE / PARTY GAMES</span></a>
         <div class="session-actions">
           <button id="manage-party" class="text-button" popovertarget="manage-panel" hidden>Players</button>
           <button id="music-button" class="text-button" popovertarget="music-panel" hidden>Music</button>
@@ -40,11 +40,11 @@
       </section>
       <main id="home" hidden>
         <section class="welcome">
-          <div class="eyebrow"><span class="tiny-square"></span> 2–12 PLAYERS. ONE FLOOR.</div>
+          <div class="eyebrow"><span class="tiny-square"></span> 2–12 PLAYERS. TWO GAMES.</div>
           <h1>A little<br />friendly <em>chaos.</em></h1>
           <p class="lede">Bring your people. Find your footing.<br />Try to be the last one standing.</p>
           <div class="home-tags"><span>NO ACCOUNTS</span><span>TOUCH OR KEYS</span><span>QUICK ROUNDS</span></div>
-          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Gather your people.</strong> Vote on the session length.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> Every tile you step on starts to fall.</p></div>
+          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Gather your people.</strong> Vote on the session length.</p><span class="step-number">03</span><p><strong>Play a round.</strong> Outlast the falling floor or jump the rope.</p></div>
         </section>
         <section class="panel join-panel">
           <div class="tile-emblem" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="warning-tile"></i><i></i><i></i><i></i><i class="missing-tile"></i><b>●</b></div>
@@ -85,7 +85,8 @@
             <ul id="players-list" class="players-list"></ul>
             <p class="fine-print host-note">Refresh or disconnect passes host controls to another connected player.</p>
           </section>
-          <section class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>The tile beneath each player starts a 1.8-second countdown. Once amber, it will fall even after you leave. Untouched tiles stay safe. Keep moving and outlast everyone.</p><p>Match your numbered character to the roster; yours has a white ring.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Simultaneous final falls: +1 point each</p></section>
+          <section id="platform-guide" class="controls-card"><span class="eyebrow">FIND YOUR FOOTING</span><h3>Stay on the Platform</h3><p>The tile beneath each player starts a 1.8-second countdown. Once amber, it will fall even after you leave. Untouched tiles stay safe. Keep moving and outlast everyone.</p><p>Match your numbered character to the roster; yours has a white ring.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or</span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div><p class="fine-print">Last standing: +3 points<br />Simultaneous final falls: +1 point each</p></section>
+          <section id="rope-guide" class="controls-card" hidden><h3>Jump Rope</h3><p>Press Space or tap the court as the rope approaches your feet. On your third ding, take a handle and pull to speed up the next swing. Everyone at the handles can pull once per swing.</p></section>
         </aside>
         <section class="arena-column">
           <div class="arena-heading"><div><div id="round-label" class="eyebrow">STAY ON THE PLATFORM</div><h1 id="phase-label">Lobby</h1></div><div class="round-clock"><span id="timer-value">—</span><span id="timer-label">HOST STARTS THE ROUND</span></div></div>
@@ -95,6 +96,10 @@
           <div class="play-area">
             <div class="stage"><div id="game-container" role="img" aria-label="Game arena: move with the touch joystick, W A S D, or arrow keys" tabindex="0"></div><div id="stage-banner" class="stage-banner"><span>Waiting for the gang</span></div></div>
             <div class="touch-options">
+              <div id="rope-controls" hidden>
+                <button id="rope-action" class="primary" type="button" aria-describedby="rope-hint">Jump</button>
+                <p id="rope-hint" class="fine-print"></p>
+              </div>
               <button id="touch-toggle" class="text-button" aria-pressed="false" aria-controls="touch-controls">Touch controls: off</button>
               <div id="touch-controls" hidden>
                 <div id="joystick" role="group" tabindex="0" aria-label="Movement joystick" aria-describedby="touch-hint" aria-disabled="true"><span class="joystick-cross" aria-hidden="true"></span><span class="joystick-thumb" aria-hidden="true"></span></div>
@@ -102,7 +107,7 @@
               </div>
             </div>
           </div>
-          <div class="arena-footer"><span><i class="legend safe"></i> UNTOUCHED</span><span><i class="legend warning"></i> FALLS IN 1.8s</span><span><i class="legend gone"></i> GONE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
+          <div class="arena-footer"><span id="rope-hud" hidden></span><span><i class="legend safe"></i> UNTOUCHED</span><span><i class="legend warning"></i> FALLS IN 1.8s</span><span><i class="legend gone"></i> GONE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
           <section id="results-panel" class="panel results-panel" hidden><span class="eyebrow">SESSION COMPLETE</span><h2 id="session-result"></h2><p id="result-text"></p><p id="results-detail"></p></section>
         </section>
       </main>

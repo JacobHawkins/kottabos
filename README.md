@@ -1,8 +1,8 @@
 # Kottabos
 
-A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of one, three or five rounds on a floor that falls beneath your footsteps. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of one, three or five rounds of Stay on the Platform, Jump Rope, or both. The same party keeps its scores between rounds.
 
-**Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
+**Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the joystick on the tiles. On the rope court, press Space or tap. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
 Built with Phaser, plain JavaScript ES modules, Node.js, and Colyseus. [PARTY_GAME_PROJECT_BRIEF.md](PARTY_GAME_PROJECT_BRIEF.md) preserves the initial specification; the owner subsequently expanded the shared party maximum to 12. Future minigames should reuse this party, recovery and score foundation. No TypeScript source or compilation workflow is used.
 
@@ -37,18 +37,26 @@ Always use the same origin, `http://127.0.0.1:2567`, for recovery. `localhost`, 
 1. Open http://127.0.0.1:2567 in **Chrome**. Enter a nickname and click **Create a party**.
 2. Copy the invitation link using the arrow next to the six-letter code. Open it in **Edge**, enter another nickname, and click **Join party**. Alternatively, open the main URL in Edge and enter the same code.
 3. Each browser is a distinct player. Both names and colors appear in the party list and arena. A second tab in the same browser profile is blocked while its first tab is open. Separate browser profiles also work.
-4. Walk around the safe lobby and lock in an avatar. Once two players are connected, the host clicks **Begin session**. Everyone has five seconds to vote for 1, 3 or 5 rounds. Most votes wins, tied choices are drawn at random, and an empty ballot defaults to one round. Round one always uses the classic 7×7 board.
-5. Move with **W A S D** or **arrow keys**. Click the arena first if the nickname field still has focus. Diagonal movement has the same speed. Switching away from the page clears held keys.
+4. Walk around the safe lobby and lock in an avatar. Once two players are connected, the host clicks **Begin session**. Everyone has five seconds to vote for 1, 3 or 5 rounds. Most votes wins, tied choices are drawn at random, and an empty ballot defaults to one round. The host can select either game or both. With both selected, the session alternates, starting on the classic tile board.
+5. In Stay on the Platform, move with **W A S D** or **arrow keys**. Click the arena first if the nickname field still has focus. Diagonal movement has the same speed. Switching away from the page clears held keys.
 6. Every tile a living player stands on starts flashing amber for **1.8 seconds**, then disappears. The shrinking bar shows time remaining. Leaving or revisiting never resets its timer, and untouched tiles remain safe. A character falls when its center reaches a missing tile. The arena boundary is solid. Eliminated and late-arriving players spectate.
 7. A lone survivor gets **3 points**. Players who fall together in the final simulation step tie for **1 point each**; earlier eliminated players and spectators get none. There is no round deadline: keep moving until only one player remains or the last players fall together.
-8. Between rounds, vote for five seconds on **Small** (5×5), **Large** (14×7, exactly twice the tiles), or **Random shape** (one of five silhouettes in the classic footprint). An empty vote selects Classic. A three-second countdown on the selected board leads into the next round. Late arrivals can vote immediately and play starting at the next countdown.
+8. Before a later tile round, vote for five seconds on **Small** (5×5), **Large** (14×7, exactly twice the tiles), or **Random shape** (one of five silhouettes in the classic footprint). An empty vote selects Classic. A three-second countdown on the selected board leads into the next round. Late arrivals can vote immediately and play starting at the next countdown.
 9. The players with the highest points earned this session share the session win. **Return to lobby** lets the host set up another session. Party totals carry over. The host can open **Players** at any time to kick a connected or reserved member and release the seat. A fresh invitation join creates a new identity.
 
-Your routes create the floor pattern. Starting tiles begin their timers when play begins, after the countdown. Every tile can fall, including the center; there is no random removal, protected final island or timed wave. Players can share tiles, but sharing never extends a timer. There is no pushing or jumping.
+In Stay on the Platform, your routes create the floor pattern. Starting tiles begin their timers when play begins, after the countdown. Every tile can fall, including the center; there is no random removal, protected final island or timed wave. Players can share tiles, but sharing never extends a timer. There is no pushing or jumping.
 
-On phones, use the thumb joystick: drag to move, release to stop. The **Touch controls** toggle also works on hybrid devices. Rotation, canceled gestures, loss of focus and reconnection clear input. Normal scrolling and zoom remain available outside the control. Use the hosted **HTTPS** invitation: plain HTTP on a LAN address does not supply the secure browser features used to guard duplicate tabs.
+On phones, use the thumb joystick in the lobby and on the tile board: drag to move, release to stop. The **Touch controls** toggle also works on hybrid devices. Rotation, canceled gestures, loss of focus and reconnection clear input. Normal scrolling and zoom remain available outside the control. Use the hosted **HTTPS** invitation: plain HTTP on a LAN address does not supply the secure browser features used to guard duplicate tabs.
 
 The first player keeps host controls when others join. A refresh/drop/leave transfers those controls to a connected player; rejoining does not take them back. The current host is named in the party interface. This permission never changes simulation authority: positions, floor hazards and scoring are settled by the server.
+
+## Jump Rope
+
+In the lobby, check **Jump Rope** in the host's minigame choices. Clear **Stay on the Platform** for a rope-only session, or leave both checked to alternate. Each rope round starts with the usual three-second countdown.
+
+Your avatar jogs automatically. Press **Space**, tap the court, or press **Jump** just before the rope reaches your feet. Each miss adds a ding beneath your player. On your third ding you take a handle. The same control becomes **Pull**. Every eliminated player can pull once per swing, and all pulls stack. Ten people on the handles can flatten the last two jumpers. Each pull changes the next swing and stays in effect for the round. The rope also speeds up on its own until jumps can no longer keep up.
+
+The last jumper earns **3 points**. If the final jumpers get their third ding on the same pass, each earns **1 point**. Refresh restores your dings and your role. A mid-round arrival watches until the next countdown.
 
 ## Character artwork
 
