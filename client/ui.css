@@ -94,6 +94,20 @@
 #game-choices legend { color:var(--muted); font-size:12px; }
 #game-choices label { display:flex; gap:8px; align-items:center; margin:0; }
 #game-choices input { width:auto; accent-color:var(--mint); }
+#party[data-game=rope] #touch-toggle,
+#party[data-game=rope] #touch-controls,
+#party[data-game=rope] .arena-footer > span:not(#rope-hud) { display:none; }
+#party[data-game=rope] .stage { aspect-ratio:8/5; }
+#party[data-game=rope] #game-container, #rope-action { touch-action:manipulation; }
+#rope-controls { width:100%; text-align:center; }
+#rope-action { width:100%; min-height:56px; font-size:18px; }
+#rope-action[data-action=pull] { background:#f0b96d; color:#2d2418; }
+#rope-hint { margin:6px 0; }
+#rope-hud { color:#ffe1ae; font-size:11px; }
+@media(max-width:740px) and (orientation:portrait) {
+  .is-playing #party[data-game=rope] .play-area { align-content:center; grid-template-rows:auto auto; gap:16px; }
+  .is-playing #party[data-game=rope] .stage { height:auto; }
+}
 .vote-panel { padding:16px; margin:0 0 14px; }
 .vote-panel h2 { margin-bottom:4px; }
 .vote-panel p { margin:0 0 12px; color:var(--muted); font-size:13px; }

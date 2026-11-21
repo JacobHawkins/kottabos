@@ -16,6 +16,10 @@ export const PlayerState = schema({
   vote: t.string().default(''),
   roundPoints: t.number().default(0),
   lastInputSeq: t.number().default(0),
+  ropeDings: t.uint8().default(0),
+  jumpedAtMs: t.number().default(-1),
+  dingAtMs: t.number().default(-1),
+  pulledSwing: t.number().default(0),
 }, 'PlayerState');
 
 export const PartyState = schema({
@@ -34,6 +38,10 @@ export const PartyState = schema({
   rows: t.number().default(7),
   phaseEndsAt: t.number().default(0),
   roundElapsedMs: t.number().default(0),
+  ropeSwing: t.number().default(0),
+  ropeStartMs: t.number().default(0),
+  ropeHitMs: t.number().default(0),
+  ropePulls: t.number().default(0),
   tiles: t.array('uint8'),
   tileGoneAtMs: t.array('number'),
   players: t.map(PlayerState),

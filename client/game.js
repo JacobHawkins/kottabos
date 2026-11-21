@@ -3,6 +3,9 @@ import characterSheetUrl from './assets/character-spritesheet.png?url';
 import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE, TILE_WARNING_MS } from '../shared/constants.js';
 import { arenaFor } from '../shared/arena.js';
 
+import { inRopeArena } from '../shared/rope.js';
+import { COURT_WIDTH, COURT_HEIGHT, drawCourt, drawRopePlayer } from './rope-view.js';
+
 const PADDING = 50;
 const SIZE = ARENA.width + PADDING * 2;
 const toColor = (color) => Number.parseInt(color.replace('#', ''), 16);
@@ -39,6 +42,49 @@ function createCharacter(scene, color, number, skin) {
     previous: null, round: null, phase: null, wasAlive: null };
 }
 
+function drawTiles(graphics, state, arena, time) {
+  graphics.fillStyle(0x081722, 0.5);
+  graphics.fillRoundedRect(PADDING - 9, PADDING + 10, arena.width + 18, arena.height + 12, 10);
+  const warningPulse = (Math.sin(time / 190) + 1) / 2;
+  for (let index = 0; index < state.tiles.length; index++) {
+    const col = index % arena.columns;
+    const row = Math.floor(index / arena.columns);
+    const x = PADDING + col * arena.tileSize;
+    const y = PADDING + row * arena.tileSize;
+    const tile = state.tiles[index];
+    if (tile === TILE_GONE) {
+      if (!state.tileGoneAtMs[index]) continue;
+      graphics.fillStyle(0x0c1b27);
+      graphics.fillRoundedRect(x + 3, y + 3, 58, 58, 5);
+      graphics.lineStyle(1, 0x27414c, 0.65);
+      graphics.strokeRoundedRect(x + 3, y + 3, 58, 58, 5);
+      graphics.fillStyle(0x45616b, 0.5);
+      graphics.fillCircle(x + 32, y + 32, 1.5);
+      continue;
+    }
+    const warning = tile === TILE_WARNING;
+    graphics.fillStyle(warning ? 0x99703d : 0x345951);
+    graphics.fillRoundedRect(x + 2, y + 7, 60, 55, 5);
+    graphics.fillStyle(warning ? (warningPulse > .5 ? 0xf2be73 : 0xd79b55) : ((col + row) % 2 ? 0x648b7c : 0x6d9687));
+    graphics.fillRoundedRect(x + 2, y + 2, 60, 55, 5);
+    graphics.lineStyle(1, warning ? 0xffd79a : 0xa5c7a8, warning ? .85 : .3);
+    graphics.strokeRoundedRect(x + 3, y + 3, 58, 52, 4);
+    if (warning) {
+      const remaining = Math.max(0, Math.min(1,
+        ((state.tileGoneAtMs?.[index] ?? state.roundElapsedMs + TILE_WARNING_MS) - state.roundElapsedMs) / TILE_WARNING_MS));
+      graphics.fillStyle(0x513d2a, .5);
+      graphics.fillRoundedRect(x + 9, y + 47, 46, 4, 2);
+      graphics.fillStyle(0xfff0bc);
+      graphics.fillRoundedRect(x + 9, y + 47, Math.max(1, 46 * remaining), 4, 2);
+      graphics.lineStyle(2, 0x765730, .7);
+      graphics.lineBetween(x + 27, y + 19, x + 36, y + 26);
+      graphics.lineBetween(x + 36, y + 26, x + 27, y + 37);
+      graphics.fillStyle(0x513d2a, .75);
+      graphics.fillCircle(x + 44, y + 12, 2);
+    }
+  }
+}
+
 export function createGame(session, controls) {
   let scene;
   const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
@@ -59,6 +105,8 @@ export function createGame(session, controls) {
       this.anims.create({ key: 'party-fall', frames: this.anims.generateFrameNumbers(CHARACTER_TEXTURE,
         { start: frameAt(20), end: frameAt(20, 5) }), frameRate: 8, repeat: 0 });
       this.board = this.add.graphics();
+      this.ropeLayer = this.add.graphics();
+      this.courtMarks = this.add.graphics().setDepth(2);
       this.characters = new Map();
       this.samples = [];
       this.fps = 0;
@@ -95,51 +143,21 @@ export function createGame(session, controls) {
       if (!state) { this.board?.clear(); return; }
       const graphics = this.board;
       const arena = arenaFor(state);
-      if (this.scale.width !== arena.width + PADDING * 2 || this.scale.height !== arena.height + PADDING * 2) {
-        this.scale.resize(arena.width + PADDING * 2, arena.height + PADDING * 2);
-      }
+      const rope = inRopeArena(state);
+      const width = rope ? COURT_WIDTH : arena.width + PADDING * 2;
+      const height = rope ? COURT_HEIGHT : arena.height + PADDING * 2;
+      if (this.scale.width !== width || this.scale.height !== height) this.scale.setGameSize(width, height);
       graphics.clear();
-      graphics.fillStyle(0x081722, 0.5);
-      graphics.fillRoundedRect(PADDING - 9, PADDING + 10, arena.width + 18, arena.height + 12, 10);
-      const warningPulse = (Math.sin(time / 190) + 1) / 2;
-      for (let index = 0; index < state.tiles.length; index++) {
-        const col = index % arena.columns;
-        const row = Math.floor(index / arena.columns);
-        const x = PADDING + col * arena.tileSize;
-        const y = PADDING + row * arena.tileSize;
-        const tile = state.tiles[index];
-        if (tile === TILE_GONE) {
-          if (!state.tileGoneAtMs[index]) continue;
-          graphics.fillStyle(0x0c1b27);
-          graphics.fillRoundedRect(x + 3, y + 3, 58, 58, 5);
-          graphics.lineStyle(1, 0x27414c, 0.65);
-          graphics.strokeRoundedRect(x + 3, y + 3, 58, 58, 5);
-          graphics.fillStyle(0x45616b, 0.5);
-          graphics.fillCircle(x + 32, y + 32, 1.5);
-          continue;
-        }
-        const warning = tile === TILE_WARNING;
-        graphics.fillStyle(warning ? 0x99703d : 0x345951);
-        graphics.fillRoundedRect(x + 2, y + 7, 60, 55, 5);
-        graphics.fillStyle(warning ? (warningPulse > .5 ? 0xf2be73 : 0xd79b55) : ((col + row) % 2 ? 0x648b7c : 0x6d9687));
-        graphics.fillRoundedRect(x + 2, y + 2, 60, 55, 5);
-        graphics.lineStyle(1, warning ? 0xffd79a : 0xa5c7a8, warning ? .85 : .3);
-        graphics.strokeRoundedRect(x + 3, y + 3, 58, 52, 4);
-        if (warning) {
-          const remaining = Math.max(0, Math.min(1,
-            ((state.tileGoneAtMs?.[index] ?? state.roundElapsedMs + TILE_WARNING_MS) - state.roundElapsedMs) / TILE_WARNING_MS));
-          graphics.fillStyle(0x513d2a, .5);
-          graphics.fillRoundedRect(x + 9, y + 47, 46, 4, 2);
-          graphics.fillStyle(0xfff0bc);
-          graphics.fillRoundedRect(x + 9, y + 47, Math.max(1, 46 * remaining), 4, 2);
-          graphics.lineStyle(2, 0x765730, .7);
-          graphics.lineBetween(x + 27, y + 19, x + 36, y + 26);
-          graphics.lineBetween(x + 36, y + 26, x + 27, y + 37);
-          graphics.fillStyle(0x513d2a, .75);
-          graphics.fillCircle(x + 44, y + 12, 2);
-        }
-      }
+      this.ropeLayer.clear();
+      this.courtMarks.clear();
+      const now = rope ? controls.ropeTime() : 0;
+      if (rope) drawCourt(graphics, this.ropeLayer, state, now);
+      else drawTiles(graphics, state, arena, time);
       const players = Object.values(state.players);
+      const slots = rope ? {
+        jumpers: players.filter(p => p.participating && p.alive).map(p => p.id),
+        pullers: players.filter(p => p.participating && !p.alive).map(p => p.id),
+      } : null;
       for (const [id, character] of this.characters) {
         if (!state.players[id]) { character.container.destroy(); this.characters.delete(id); }
       }
@@ -153,6 +171,12 @@ export function createGame(session, controls) {
           character = createCharacter(this, toColor(player.color), number, player.skin);
           this.characters.set(player.id, character);
         }
+        if (rope) {
+          character.container.setVisible(player.participating);
+          if (player.participating) drawRopePlayer(character, this.courtMarks, player, local, slots, now, controls, state, motionPreference.matches);
+          return;
+        }
+        character.container.setRotation(0);
         const lobby = state.phase === 'lobby' || state.phase === 'lengthVote' || state.phase === 'waiting' && !state.sessionRound;
         const shortName = [...player.name].length > 12 ? [...player.name].slice(0, 11).join('') + '…' : player.name;
         character.label.setText(local ? `${number} · YOU` : shortName);

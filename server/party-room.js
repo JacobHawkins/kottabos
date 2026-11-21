@@ -68,6 +68,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       });
       this.onMessage('replay', (client) => this.replay(client));
       this.onMessage('input', (client, input) => this.acceptInput(client, input));
+      this.onMessage('action', (client, input) => games[this.state.gameId].act?.(this.state, this.playerFor(client), input));
       this.onMessage('clearInputs', (client) => this.clearInputs(client.userData?.playerId));
       this.onMessage('identify', (client) => this.sendWelcome(client));
       this.onMessage('ping', (client, data) => {
@@ -227,7 +228,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
 
     acceptInput(client, data) {
       const player = this.playerFor(client);
-      if (!canMoveInParty(this.state.phase, player)) return;
+      if (!canMoveInParty(this.state.phase, player, this.state.gameId)) return;
       if (!data || !Number.isSafeInteger(data.seq) || data.seq <= 0 ||
           !Number.isFinite(data.x) || !Number.isFinite(data.y) || Math.abs(data.x) > 1 || Math.abs(data.y) > 1) return;
       const input = this.inputState.get(player.id);
@@ -290,11 +291,15 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.state.phaseEndsAt = 0;
     }
 
+    nextGameId() {
+      return this.state.selectedGames[this.state.sessionRound % this.state.selectedGames.length];
+    }
+
     startRound() {
-      this.state.gameId = this.state.selectedGames[this.state.sessionRound % this.state.selectedGames.length];
+      this.state.gameId = this.nextGameId();
       this.state.sessionRound += 1;
       this.state.round += 1;
-      this.state.resultText = '';
+      if (this.state.sessionRound === 1) this.state.resultText = '';
       this.state.winnerIds.clear();
       for (const entry of this.state.players.values()) {
         entry.roundPoints = 0;
@@ -379,7 +384,8 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         this.clearInputs(player.id);
       }
       if (this.state.sessionRound < this.state.sessionLength) {
-        this.openVote('mapVote');
+        if (games[this.nextGameId()].usesMaps) this.openVote('mapVote');
+        else this.state.phase = 'waiting';
       } else {
         const players = [...this.state.players.values()];
         const high = Math.max(0, ...players.map(p => p.sessionPoints));

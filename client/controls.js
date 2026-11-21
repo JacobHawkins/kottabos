@@ -2,6 +2,7 @@ import { STEP_MS } from '../shared/constants.js';
 import { movePlayer, normalizeInput } from '../shared/movement.js';
 import { canMoveInParty } from '../shared/party.js';
 import { arenaFor } from '../shared/arena.js';
+import { inRopeArena, NEXT_JUMP_MS } from '../shared/rope.js';
 
 const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const TOUCH_SETTING = 'kottabos.touch-controls';
@@ -16,7 +17,7 @@ export function joystickDirection(x, y, radius) {
 
 // One controller for the page lifetime, independent of reconnecting Room objects.
 export class Controls {
-  constructor(session, { joystick, toggle, panel, hint } = {}) {
+  constructor(session, { joystick, toggle, panel, hint, arena, actionButton } = {}) {
     this.session = session;
     this.keys = new Set();
     this.pending = [];
@@ -33,7 +34,22 @@ export class Controls {
     this.hint = hint;
     this.phase = '';
     this.wasMovable = false;
+    this.lastSnapshotAt = performance.now();
+    this.localJump = null;
+    const press = (event) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      this.ropeAction();
+    };
+    arena?.addEventListener('pointerdown', press);
+    actionButton?.addEventListener('pointerdown', press);
+    actionButton?.addEventListener('click', event => { if (event.detail === 0) this.ropeAction(); });
     window.addEventListener('keydown', (event) => {
+      if (event.code === 'Space' && inRopeArena(this.session.state) && this.session.state.phase === 'playing') {
+        if (event.target !== actionButton && event.target.closest?.('input,textarea,select,button,a,[contenteditable=true]')) return;
+        event.preventDefault();
+        if (!event.repeat) this.ropeAction();
+        return;
+      }
       if (!MOVEMENT_KEYS.has(event.code) || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
       if (this.canMove()) { event.preventDefault(); this.keys.add(event.code); }
     });
@@ -122,7 +138,35 @@ export class Controls {
   }
 
   get me() { return this.session.state?.players[this.session.playerId]; }
-  canMove() { return this.session.connection === 'connected' && canMoveInParty(this.session.state?.phase, this.me); }
+  canMove() { return this.session.connection === 'connected' && canMoveInParty(this.session.state?.phase, this.me, this.session.state?.gameId); }
+
+  ropeTime() {
+    const state = this.session.state;
+    const advance = state.phase === 'playing' && this.session.connection === 'connected'
+      ? Math.min(120, performance.now() - this.lastSnapshotAt) : 0;
+    return Math.min(state.ropeHitMs, state.roundElapsedMs + advance);
+  }
+
+  ropeAction() {
+    const state = this.session.state, me = this.me;
+    if (!inRopeArena(state) || state.phase !== 'playing' || this.session.connection !== 'connected' ||
+        !me?.connected || !me.participating) return;
+    const now = this.ropeTime();
+    const lastJump = this.visualJumpAt(me);
+    if (me.alive && lastJump >= 0 && now - lastJump < NEXT_JUMP_MS) return;
+    if (!me.alive && me.pulledSwing === state.ropeSwing) return;
+    const action = me.alive ? 'jump' : 'pull';
+    if (this.session.send('action', { round: state.round, swing: state.ropeSwing, action }) && me.alive) {
+      this.localJump = { at: now, sent: performance.now(), previous: me.jumpedAtMs };
+    }
+  }
+
+  visualJumpAt(player) {
+    const jump = this.localJump;
+    if (player.id === this.session.playerId && jump && player.jumpedAtMs === jump.previous &&
+        performance.now() - jump.sent < 300) return jump.at;
+    return player.jumpedAtMs;
+  }
   direction() {
     return normalizeInput({
       x: this.touch.x + Number(this.keys.has('KeyD') || this.keys.has('ArrowRight')) - Number(this.keys.has('KeyA') || this.keys.has('ArrowLeft')),
@@ -131,6 +175,7 @@ export class Controls {
   }
 
   clear() {
+    this.localJump = null;
     this.keys.clear();
     this.releaseTouch(false);
     this.clearQueue();
@@ -145,6 +190,7 @@ export class Controls {
   }
 
   reconcile() {
+    this.lastSnapshotAt = performance.now();
     const me = this.me;
     const movable = Boolean(this.canMove());
     const phase = this.session.state?.phase || '';

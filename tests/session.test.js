@@ -5,7 +5,6 @@ import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../server/app.js';
 import { MAX_PLAYERS, STEP_MS, PLAYER_SPEED, TILE_SAFE, TILE_WARNING } from '../shared/constants.js';
 import { tileIndexAt } from '../shared/movement.js';
-import { games } from '../server/minigames/index.js';
 
 async function until(predicate, message, timeout = 3000) {
   const deadline = Date.now() + timeout;
@@ -34,8 +33,6 @@ async function drop(room, serverRoom, id) {
 }
 
 test('a five-round session cycles the host selection and keeps waiting for a second player', async t => {
-  // Register another rules entry only for this test. Both use the real tile rules.
-  games.testPlatform = games.platform;
   const server = await createAppServer({ port: 0, countdownMs: 125, voteMs: 200, log: false });
   await server.listen();
   const client = new Client(`http://127.0.0.1:${server.httpServer.address().port}`);
@@ -43,19 +40,18 @@ test('a five-round session cycles the host selection and keeps waiting for a sec
   t.after(async () => {
     await Promise.allSettled(members.filter(m => m.connection.isOpen).map(m => m.leave()));
     await server.close();
-    delete games.testPlatform;
   });
   const host = observe(await client.create('party', { name: 'Host' }));
   members.push(host);
   const guest = observe(await client.joinById(host.roomId, { name: 'Guest' }));
   members.push(guest);
   const state = server.rooms.get(host.roomId).state;
-  guest.send('games', ['testPlatform']);
+  guest.send('games', ['rope']);
   host.send('games', []);
   host.send('games', ['unknown']);
   await delay(50);
   assert.deepEqual([...state.selectedGames], ['platform']);
-  host.send('games', ['testPlatform', 'platform']);
+  host.send('games', ['rope', 'platform']);
   host.send('start');
   await until(() => state.phase === 'lengthVote', 'timer opens');
   host.send('vote', { phase: 'lengthVote', round: state.round, choice: '5' });
@@ -66,11 +62,13 @@ test('a five-round session cycles the host selection and keeps waiting for a sec
   members.push(observe(await client.joinById(host.roomId, { name: 'Arrival' })));
   for (let round = 1; round <= 5; round++) {
     await until(() => state.phase === 'playing' && state.sessionRound === round, 'round begins automatically');
-    assert.equal(state.gameId, round % 2 ? 'testPlatform' : 'platform');
-    assert.equal(state.mapName, 'Classic');
+    assert.equal(state.gameId, round % 2 ? 'rope' : 'platform');
+    assert.equal(state.mapName, round % 2 ? 'Rope court' : 'Classic');
     host.send('skin', 'circle');
     host.send('games', ['platform']);
-    await until(() => state.phase === (round < 5 ? 'mapVote' : 'results'), 'round closes');
+    // Only an upcoming tile round opens a map vote. A rope round goes straight to its countdown.
+    const after = round === 5 ? 'results' : round % 2 ? 'mapVote' : 'countdown';
+    await until(() => state.phase === after, 'round closes and the next game gets its own setup', 8500);
     for (const p of state.players.values()) {
       assert.equal(p.sessionPoints, round);
       assert.equal(p.skin, 'sprite');

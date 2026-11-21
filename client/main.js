@@ -2,6 +2,7 @@ import { PartySession, claimBrowserTab } from './session.js';
 import { Controls } from './controls.js';
 import { MINIGAMES, MAP_CHOICES, SESSION_CHOICES } from '../shared/party.js';
 import { setupMusic } from './music.js';
+import { inRopeArena, STRIKES_OUT } from '../shared/rope.js';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../shared/constants.js';
 import characterCreditsUrl from './assets/character-credits.csv?url';
 
@@ -73,8 +74,8 @@ function renderRoster(state) {
   const players = Object.values(state.players);
   $('party').dataset.phase = state.phase;
   // Do not replace buttons or roster nodes for every movement patch.
-  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints, sessionPoints }) =>
-    [id, name, color, connected, score, alive, participating, roundPoints, sessionPoints])) + state.hostId + state.phase + session.playerId;
+  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings }) =>
+    [id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings])) + state.gameId + state.hostId + state.phase + session.playerId;
   if (key === lastRoster) return;
   lastRoster = key;
   const rows = players.map((player) => {
@@ -96,6 +97,9 @@ function renderRoster(state) {
     status.className = 'player-state';
     status.textContent = !player.connected ? 'RECONNECTING · SEAT HELD' : ['lobby', 'lengthVote'].includes(state.phase) ? 'IN THE PARTY'
       : !player.participating ? 'SPECTATING · NEXT ROUND' : player.alive ? 'STILL STANDING' : 'ELIMINATED · SPECTATING';
+    if (inRopeArena(state) && player.connected && player.participating) {
+      status.textContent = player.alive ? `JUMPING · ${player.ropeDings}/${STRIKES_OUT} DINGS` : 'AT THE ROPE HANDLE';
+    }
     if (player.id === state.hostId) status.textContent += ' · HOST';
     if (state.sessionRound && state.phase !== 'lobby') status.textContent += ` · ${player.sessionPoints} SESSION PTS`;
     info.append(name, status);
@@ -182,6 +186,29 @@ function renderOptions(state, me, host, online) {
   if (openingVote) $('vote-panel').scrollIntoView({ block: 'nearest' });
 }
 
+function renderRope(state, me, online) {
+  const rope = inRopeArena(state);
+  $('party').dataset.game = rope ? 'rope' : 'platform';
+  $('platform-guide').hidden = rope;
+  $('rope-guide').hidden = !rope && !(state.phase === 'lobby' && state.selectedGames.includes('rope'));
+  $('rope-controls').hidden = !rope || !['countdown', 'playing'].includes(state.phase);
+  $('rope-hud').hidden = !rope;
+  $('game-container').setAttribute('aria-label', rope ? 'Jump Rope court. Press Space or tap to jump or pull.'
+    : 'Game arena. Move with the touch joystick, W A S D, or arrow keys.');
+  if (!rope) return;
+  const pulling = me?.participating && !me.alive;
+  const pulled = pulling && me.pulledSwing === state.ropeSwing;
+  const button = $('rope-action');
+  button.dataset.action = pulling ? 'pull' : 'jump';
+  button.textContent = pulled ? 'Pulled!' : pulling ? 'Pull' : 'Jump';
+  button.disabled = !online || !me?.participating || state.phase !== 'playing' || pulled;
+  $('rope-hint').textContent = !me?.participating ? 'You join on the next round.'
+    : pulling ? 'Space or tap once per swing. Every pull adds speed.'
+    : 'Space or tap the court just before the rope reaches your feet.';
+  $('rope-hud').textContent = [`Swing ${state.ropeSwing}`, me?.participating ? `${me.ropeDings}/${STRIKES_OUT} dings` : 'Spectating',
+    `${state.ropePulls} ${state.ropePulls === 1 ? 'pull' : 'pulls'}`].join(' · ');
+}
+
 function render(state) {
   $('home').hidden = true;
   $('party').hidden = false;
@@ -199,21 +226,23 @@ function render(state) {
   $('invite-link').value = `${location.origin}/?room=${state.code}`;
   $('room-code').value = state.code;
   renderOptions(state, me, host, online);
+  renderRope(state, me, online);
   const active = state.sessionRound && state.phase !== 'lobby';
   $('round-label').textContent = active ? `Round ${state.sessionRound} of ${state.sessionLength} · ${state.mapName}` : 'Party lobby';
   $('phase-label').textContent = { lobby: 'The gathering place.', lengthVote: 'Session vote', mapVote: 'Map vote',
-    waiting: 'Waiting for players', countdown: 'Find your footing.', playing: MINIGAMES[state.gameId], results: 'Session results' }[state.phase];
+    waiting: 'Waiting for players', countdown: inRopeArena(state) ? 'Jump Rope' : 'Find your footing.', playing: MINIGAMES[state.gameId], results: 'Session results' }[state.phase];
   $('phase-label').dataset.phase = state.phase;
   $('start-button').hidden = !host || state.phase !== 'lobby';
   const connected = players.filter((player) => player.connected);
   $('start-button').disabled = !online || connected.length < 2;
   $('replay-button').hidden = !host || state.phase !== 'results';
   $('replay-button').disabled = !online;
-  $('lobby-hint').textContent = !online ? 'Reconnecting automatically. Your character still faces the falling floor.' : state.phase === 'lobby'
+  $('lobby-hint').textContent = !online ? 'Reconnecting automatically. The round keeps running.' : state.phase === 'lobby'
     ? connected.length < 2 ? 'Explore the lobby and invite another player.' : host ? 'Begin the session to open the round vote.' : 'Explore the lobby while the host gets started.'
     : state.phase === 'results' ? 'Return to the lobby for another session. Party scores carry over.'
       : state.phase === 'waiting' ? 'The session resumes when two players are connected.'
       : ['lengthVote', 'mapVote'].includes(state.phase) ? 'Everyone can vote. Tied votes are decided at random.'
+      : inRopeArena(state) ? (state.phase === 'countdown' && state.resultText ? state.resultText : $('rope-hint').textContent)
       : me?.participating && me.alive ? 'Make every tile count.' : 'You’re spectating. You can play in the next round.';
   $('results-panel').hidden = state.phase !== 'results';
   $('result-text').textContent = state.resultText;
@@ -236,7 +265,8 @@ function renderClock() {
   const me = state.players[session.playerId];
   const banner = $('stage-banner');
   banner.classList.toggle('countdown', state.phase === 'countdown' && session.connection === 'connected');
-  banner.hidden = session.connection === 'connected' && (['lobby', 'lengthVote', 'mapVote', 'results'].includes(state.phase) || state.phase === 'playing' && me?.alive);
+  banner.hidden = session.connection === 'connected' && (['lobby', 'lengthVote', 'mapVote', 'results'].includes(state.phase) ||
+    state.phase === 'playing' && (me?.alive || inRopeArena(state) && me?.participating));
   banner.firstElementChild.textContent = session.connection !== 'connected' ? 'Reconnecting… your spot is reserved'
     : state.phase === 'waiting' ? 'Waiting for two connected players'
       : state.phase === 'countdown' ? Math.max(1, seconds)
@@ -268,7 +298,8 @@ if (tabClaim === 'claimed') {
     onNotice: notice,
     onReset: reset,
   });
-  controls = new Controls(session, { joystick: $('joystick'), toggle: $('touch-toggle'), panel: $('touch-controls'), hint: $('touch-hint') });
+  controls = new Controls(session, { joystick: $('joystick'), toggle: $('touch-toggle'), panel: $('touch-controls'), hint: $('touch-hint'),
+    arena: $('game-container'), actionButton: $('rope-action') });
   $('skin-choice').onchange = () => render(session.state);
   $('lock-skin').onclick = () => session.send('skin', $('skin-choice').value);
   for (const [id, title] of Object.entries(MINIGAMES)) {
