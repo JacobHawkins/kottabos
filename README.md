@@ -1,6 +1,6 @@
 # Kottabos
 
-A small browser party game for **two to twelve people**. Create a private party, share its code, and let the host start a round on a floor that falls beneath your footsteps. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of one, three or five rounds on a floor that falls beneath your footsteps. The same party keeps its scores between rounds.
 
 **Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the touch joystick. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
@@ -37,11 +37,12 @@ Always use the same origin, `http://127.0.0.1:2567`, for recovery. `localhost`, 
 1. Open http://127.0.0.1:2567 in **Chrome**. Enter a nickname and click **Create a party**.
 2. Copy the invitation link using the arrow next to the six-letter code. Open it in **Edge**, enter another nickname, and click **Join party**. Alternatively, open the main URL in Edge and enter the same code.
 3. Each browser is a distinct player. Both names and colors appear in the party list and arena. A second tab in the same browser profile is blocked while its first tab is open. Separate browser profiles also work.
-4. With at least two connected players, the current host clicks **Start round**. There are no ready checks. The arena expands for the countdown and round; lobby menus return with results. You can switch between the browser windows to control each character locally.
+4. Walk around the safe lobby and lock in an avatar. Once two players are connected, the host clicks **Begin session**. Everyone has five seconds to vote for 1, 3 or 5 rounds. Most votes wins, tied choices are drawn at random, and an empty ballot defaults to one round. Round one always uses the classic 7×7 board.
 5. Move with **W A S D** or **arrow keys**. Click the arena first if the nickname field still has focus. Diagonal movement has the same speed. Switching away from the page clears held keys.
 6. Every tile a living player stands on starts flashing amber for **1.8 seconds**, then disappears. The shrinking bar shows time remaining. Leaving or revisiting never resets its timer, and untouched tiles remain safe. A character falls when its center reaches a missing tile. The arena boundary is solid. Eliminated and late-arriving players spectate.
 7. A lone survivor gets **3 points**. Players who fall together in the final simulation step tie for **1 point each**; earlier eliminated players and spectators get none. There is no round deadline: keep moving until only one player remains or the last players fall together.
-8. Both browsers receive the same result and cumulative score. The host clicks **Play again** to return everyone to the lobby. The host can start the next round immediately once two players are connected.
+8. Between rounds, vote for five seconds on **Small** (5×5), **Large** (14×7, exactly twice the tiles), or **Random shape** (one of five silhouettes in the classic footprint). An empty vote selects Classic. A three-second countdown on the selected board leads into the next round. Late arrivals can vote immediately and play starting at the next countdown.
+9. The players with the highest points earned this session share the session win. **Return to lobby** lets the host set up another session. Party totals carry over. The host can open **Players** at any time to kick a connected or reserved member and release the seat. A fresh invitation join creates a new identity.
 
 Your routes create the floor pattern. Starting tiles begin their timers when play begins, after the countdown. Every tile can fall, including the center; there is no random removal, protected final island or timed wave. Players can share tiles, but sharing never extends a timer. There is no pushing or jumping.
 
@@ -51,11 +52,13 @@ The first player keeps host controls when others join. A refresh/drop/leave tran
 
 ## Character artwork
 
-All players now use the supplied Universal LPC character sheet: four-direction walking, gentle idle animation and a fall animation. Colored ground markers and number badges distinguish players; your character keeps the white ring and YOU label. The original PNG is stored unchanged in `client/assets/character-spritesheet.png`. The renderer uses its 64×64 cells and anchors the feet to the authoritative position. Motion respects the browser’s reduced-motion setting, and refresh/reopen after elimination restores a fallen pose without replaying the fall. Sprite art does not change movement speed, collision or the center-point floor rule.
+The original avatar uses the supplied Universal LPC character sheet for four-direction walking, gentle idle animation and a fall animation. Colored ground markers and number badges distinguish players; your character keeps the white ring and YOU label. The original PNG is stored unchanged in `client/assets/character-spritesheet.png`. The renderer uses its 64×64 cells and anchors the feet to the authoritative position. Motion respects the browser’s reduced-motion setting, and refresh/reopen after elimination restores a fallen pose without replaying the fall. Sprite art does not change movement speed, collision or the center-point floor rule.
 
 The footer links the generator’s full contributor/asset credits and license information; [asset provenance and frame mapping](client/assets/README.md) records the source. The roughly 318 KiB sheet loads once after joining. The larger credits CSV downloads only when clicked.
 
-Music, effects and voice lines can be tied to movement, tile collapse, elimination, victory or round transitions. Phaser supports this, but audio remains disabled in the current game and no audio files were supplied with this update. A future audio pass should unlock playback after a click/tap, provide mute/volume controls, and play authoritative event sounds once without replaying them on recovery.
+Circle, square and triangle skins use the same movement, hit position, seat color and number. Choose an avatar in the lobby and click **Lock in**. It stays fixed through the session and recovery.
+
+**Music** opens per-browser mute and volume controls. DK-Water loops in the lobby and session results. DK-Racing loops through play and map votes. After a refresh, tap the page if the browser pauses autoplay. Preferences persist on this browser.
 
 ## Build and serve production
 
@@ -143,7 +146,7 @@ One Node process runs Colyseus and the Vite middleware on the same origin and po
 | Port 2567 already in use | Stop the previous process, or set `$env:PORT = '2568'` before `npm start` and open that printed URL. |
 | Party full | Twelve connected or reserved seats are occupied. Have someone leave explicitly or wait for expiry. |
 | Another tab is active | Use that tab, close it and click **Try this tab again**, or use a different browser/profile for a second player. |
-| No movement | Wait for the round, use WASD/arrows or enable Touch controls and drag. Eliminated players and spectators cannot move. |
+| No movement | In the lobby or during a round, use WASD/arrows or enable Touch controls and drag. Eliminated players and spectators cannot move. |
 | Reconnecting persists | The host may be waking or unavailable. Cancel if needed; after expiry, join again or create a new party. |
 | Browser needs secure features | Use HTTPS and a current browser with Web Locks. An ordinary HTTP LAN URL is not equivalent to loopback testing. |
 | Browser tests cannot launch | Install desktop Chrome and Edge, or explicitly configure available Playwright browser channels. No browser download is needed on the verified machine. |
@@ -156,6 +159,6 @@ The phase specification is [instructions/NEXT_MILESTONES_WEB_AND_MOBILE.md](inst
 
 ## Current boundaries
 
-This prototype has one minigame, keyboard/touch controls, animated LPC characters and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery, audio or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
+This prototype has one minigame, keyboard/touch controls, animated LPC characters and proportionate pilot request/room limits. Parties live only in server memory. There are no accounts, cross-device recovery or crash persistence. Free hosting can sleep, restart or suspend at quota exhaustion.
 
 The first hosted computer + real-phone playtest passed by owner report. Twelve-person play, network switching/background suspension, and a friend on another network remain pending. Automated twelve-client checks, browser emulation and owner-reported experience are recorded separately. Use [the playtest sheet](docs/playtest.md) for broader coverage.

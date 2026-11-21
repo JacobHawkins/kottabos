@@ -5,6 +5,7 @@ import { Client } from '@colyseus/sdk';
 import { createAppServer } from '../server/app.js';
 import { MAX_PLAYERS, STEP_MS, PLAYER_SPEED, TILE_SAFE, TILE_WARNING } from '../shared/constants.js';
 import { tileIndexAt } from '../shared/movement.js';
+import { games } from '../server/minigames/index.js';
 
 async function until(predicate, message, timeout = 3000) {
   const deadline = Date.now() + timeout;
@@ -32,10 +33,64 @@ async function drop(room, serverRoom, id) {
   return token;
 }
 
+test('a five-round session cycles the host selection and keeps waiting for a second player', async t => {
+  // Register another rules entry only for this test. Both use the real tile rules.
+  games.testPlatform = games.platform;
+  const server = await createAppServer({ port: 0, countdownMs: 125, voteMs: 200, log: false });
+  await server.listen();
+  const client = new Client(`http://127.0.0.1:${server.httpServer.address().port}`);
+  const members = [];
+  t.after(async () => {
+    await Promise.allSettled(members.filter(m => m.connection.isOpen).map(m => m.leave()));
+    await server.close();
+    delete games.testPlatform;
+  });
+  const host = observe(await client.create('party', { name: 'Host' }));
+  members.push(host);
+  const guest = observe(await client.joinById(host.roomId, { name: 'Guest' }));
+  members.push(guest);
+  const state = server.rooms.get(host.roomId).state;
+  guest.send('games', ['testPlatform']);
+  host.send('games', []);
+  host.send('games', ['unknown']);
+  await delay(50);
+  assert.deepEqual([...state.selectedGames], ['platform']);
+  host.send('games', ['testPlatform', 'platform']);
+  host.send('start');
+  await until(() => state.phase === 'lengthVote', 'timer opens');
+  host.send('vote', { phase: 'lengthVote', round: state.round, choice: '5' });
+  await guest.leave();
+  await until(() => state.phase === 'waiting', 'vote closes with only the host present');
+  assert.equal(state.sessionLength, 5);
+  assert.equal(state.round, 0);
+  members.push(observe(await client.joinById(host.roomId, { name: 'Arrival' })));
+  for (let round = 1; round <= 5; round++) {
+    await until(() => state.phase === 'playing' && state.sessionRound === round, 'round begins automatically');
+    assert.equal(state.gameId, round % 2 ? 'testPlatform' : 'platform');
+    assert.equal(state.mapName, 'Classic');
+    host.send('skin', 'circle');
+    host.send('games', ['platform']);
+    await until(() => state.phase === (round < 5 ? 'mapVote' : 'results'), 'round closes');
+    for (const p of state.players.values()) {
+      assert.equal(p.sessionPoints, round);
+      assert.equal(p.skin, 'sprite');
+    }
+  }
+  assert.equal(state.sessionWinnerIds.length, 2);
+  host.send('replay');
+  await until(() => state.phase === 'lobby', 'host returns to lobby');
+  host.send('start');
+  await until(() => state.phase === 'lengthVote', 'new session vote opens');
+  for (const p of state.players.values()) {
+    assert.equal(p.sessionPoints, 0);
+    assert.equal(p.score, 5);
+  }
+});
+
 // Serial because the Colyseus matchmaker is process-global; the protocol clients
 // below are independent real WebSocket sessions, not room method mocks.
 test('party lifecycle and recovery over real HTTP/WebSocket connections', { timeout: 30_000 }, async (t) => {
-  let server = await createAppServer({ port: 0, reconnectionSeconds: 3, countdownMs: 100, log: false });
+  let server = await createAppServer({ port: 0, reconnectionSeconds: 3, countdownMs: 100, voteMs: 150, log: false });
   await server.listen();
   let endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
   let client = new Client(endpoint);
@@ -89,6 +144,22 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
       await Promise.all(created.map((room) => room.leave()));
     }
     await until(() => server.rooms.size === 1, 'leaving frees pilot room capacity');
+  });
+
+  await t.test('only the host can release a connected or reserved seat, including its credential', async () => {
+    for (const reserved of [false, true]) {
+      const guest = track(await client.joinById(first.roomId, { name: 'Kick test' }));
+      const id = [...authoritative.state.players.keys()].at(-1);
+      second.send('kick', id);
+      first.send('kick', firstId);
+      await delay(80);
+      assert.equal(authoritative.state.players.size, 3);
+      const token = reserved ? await drop(guest, authoritative, id) : guest.reconnectionToken;
+      first.send('kick', id);
+      await until(() => !authoritative.state.players.has(id), 'target leaves immediately');
+      await assert.rejects(new Client(endpoint).reconnect(token));
+      assert.equal(authoritative.state.hostId, firstId);
+    }
   });
 
   await t.test('later joins keep the creator host; guests cannot start', async () => {

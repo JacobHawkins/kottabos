@@ -77,21 +77,8 @@ test('twelve-player party fits phone layouts, keeps numbered identities and repl
     expect(joystick.y + joystick.height).toBeLessThanOrEqual(391);
     expect(joystick.x).toBeGreaterThan(stage.x + stage.width);
     await host.screenshot({ path: testInfo.outputPath('twelve-phone-landscape.png'), fullPage: true });
-    expect(await host.evaluate(() => {
-      const canvas = document.querySelector('#game-container canvas');
-      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-      const colors = new Set([...document.querySelectorAll('.avatar')].map(avatar =>
-        getComputedStyle(avatar).backgroundColor.match(/\d+/g).slice(0, 3).join(',')));
-      let lastCharacterRow = 0;
-      for (let offset = 0; offset < pixels.length; offset += 4) {
-        if (colors.has(`${pixels[offset]},${pixels[offset + 1]},${pixels[offset + 2]}`)) {
-          lastCharacterRow = Math.floor(offset / 4 / canvas.width);
-        }
-      }
-      const bounds = canvas.getBoundingClientRect();
-      return document.querySelector('#stage-banner span').getBoundingClientRect().top -
-        (bounds.y + (lastCharacterRow + 1) * bounds.height / canvas.height);
-    }), 'the lobby banner stays below the bottom row of characters').toBeGreaterThan(0);
+    // Roaming players can occupy any lobby tile, including the bottom edge.
+    await expect(host.locator('#stage-banner')).toBeHidden();
 
     const departing = [...bots][0];
     await departing.leave();

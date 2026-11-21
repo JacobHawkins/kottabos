@@ -35,7 +35,7 @@ function harness(t) {
   }
   t.after(() => { for (const [key, descriptor] of originals) descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key]; });
   const sent = [];
-  const session = { connection: 'connected', playerId: 'me', state: { phase: 'playing', round: 1, players: { me: { x: 150, y: 150, alive: true, participating: true, lastInputSeq: 0 } } }, send: (type, value) => { sent.push({ type, value }); return true; } };
+  const session = { connection: 'connected', playerId: 'me', state: { phase: 'playing', round: 1, players: { me: { x: 150, y: 150, connected: true, alive: true, participating: true, lastInputSeq: 0 } } }, send: (type, value) => { sent.push({ type, value }); return true; } };
   const joystick = new Element(), toggle = new Element(), panel = new Element(), hint = new Element();
   const controls = new Controls(session, { joystick, toggle, panel, hint });
   controls.reconcile();

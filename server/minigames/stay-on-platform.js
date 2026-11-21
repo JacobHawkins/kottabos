@@ -1,7 +1,8 @@
 import {
-  ARENA, TILE_GONE, TILE_SAFE, TILE_WARNING, TILE_WARNING_MS,
+  TILE_GONE, TILE_SAFE, TILE_WARNING, TILE_WARNING_MS,
 } from '../../shared/constants.js';
-import { movePlayer, tileIndexAt } from '../../shared/movement.js';
+import { movePlayer, tileIndexInArena } from '../../shared/movement.js';
+import { prepareMap, mapSpawns } from './maps.js';
 
 const SPAWNS = [
   // Tile centers around the inset perimeter, in opposite pairs. The first four
@@ -22,20 +23,15 @@ const SPAWNS = [
 ];
 
 /** Prepare participants and floor at countdown start; the party owns phase changes. */
-export function createRound(state) {
-  const tileCount = ARENA.columns * ARENA.rows;
-  for (const [values, initial] of [[state.tiles, TILE_SAFE], [state.tileGoneAtMs, 0]]) {
-    while (values.length < tileCount) values.push(initial);
-    if (values.length > tileCount) values.splice(tileCount);
-    for (let index = 0; index < tileCount; index += 1) values[index] = initial;
-  }
-
+export function createRound(state, map = 'classic') {
+  const arena = prepareMap(state, map);
+  const spawns = map === 'classic' ? SPAWNS : mapSpawns(state, state.players.size);
   const participantIds = [];
   for (const [id, player] of state.players) {
     player.participating = Boolean(player.connected);
     player.alive = player.participating;
     if (player.participating) {
-      const spawn = SPAWNS[participantIds.length % SPAWNS.length];
+      const spawn = spawns[participantIds.length];
       player.x = spawn.x;
       player.y = spawn.y;
       participantIds.push(id);
@@ -44,6 +40,7 @@ export function createRound(state) {
   state.roundElapsedMs = 0;
   return {
     participantIds,
+    arena,
     elapsedMs: 0,
     lastEliminatedIds: [],
     outcome: null,
@@ -87,8 +84,8 @@ export function finishRound(state, round, reason = 'round-ended') {
   return round.outcome;
 }
 
-function triggerFloor(state, player, elapsedMs) {
-  const tile = tileIndexAt(player);
+function triggerFloor(state, player, elapsedMs, arena) {
+  const tile = tileIndexInArena(player, arena);
   if (tile >= 0 && state.tiles[tile] === TILE_SAFE) {
     state.tiles[tile] = TILE_WARNING;
     // Public, elapsed-round deadlines let every client display the same warning
@@ -109,18 +106,18 @@ export function updateRound(state, round, { dtMs, inputs = new Map() }) {
 
   // This runs only after countdown. Warn spawn/current tiles before applying
   // input, so moving immediately cannot avoid starting their countdowns.
-  for (const id of before) triggerFloor(state, state.players.get(id), round.elapsedMs);
+  for (const id of before) triggerFloor(state, state.players.get(id), round.elapsedMs, round.arena);
   round.elapsedMs += stepMs;
   state.roundElapsedMs = round.elapsedMs;
 
   for (const id of before) {
     const player = state.players.get(id);
     if (player.connected) {
-      const position = movePlayer(player, inputs.get(id) || { x: 0, y: 0 }, stepMs / 1000);
+      const position = movePlayer(player, inputs.get(id) || { x: 0, y: 0 }, stepMs / 1000, round.arena);
       player.x = position.x;
       player.y = position.y;
     }
-    triggerFloor(state, player, round.elapsedMs);
+    triggerFloor(state, player, round.elapsedMs, round.arena);
   }
   for (let tile = 0; tile < state.tiles.length; tile += 1) {
     if (state.tiles[tile] === TILE_WARNING && round.elapsedMs >= state.tileGoneAtMs[tile]) {
@@ -133,7 +130,7 @@ export function updateRound(state, round, { dtMs, inputs = new Map() }) {
   const eliminated = [];
   for (const id of before) {
     const player = state.players.get(id);
-    const tile = tileIndexAt(player);
+    const tile = tileIndexInArena(player, round.arena);
     if (tile < 0 || state.tiles[tile] === TILE_GONE) {
       player.alive = false;
       eliminated.push(id);

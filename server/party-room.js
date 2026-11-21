@@ -2,9 +2,12 @@ import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { Room, ServerError } from '@colyseus/core';
 import { PartyState, PlayerState } from './state.js';
-import { ARENA, MAX_PLAYERS, PATCH_HZ, PLAYER_COLORS, STEP_MS, TILE_SAFE } from '../shared/constants.js';
-import { normalizeInput } from '../shared/movement.js';
-import { createRound, updateRound } from './minigames/stay-on-platform.js';
+import { MAX_PLAYERS, PATCH_HZ, PLAYER_COLORS, STEP_MS } from '../shared/constants.js';
+import { normalizeInput, movePlayer } from '../shared/movement.js';
+import { canMoveInParty, KICK_CODE, MAP_CHOICES, SESSION_CHOICES, SKINS, VOTE_MS } from '../shared/party.js';
+import { games } from './minigames/index.js';
+import { prepareMap } from './minigames/maps.js';
+import { winningChoice } from './voting.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const INPUT_QUEUE_LIMIT = 6;
@@ -26,7 +29,7 @@ export function validateName(value) {
 }
 
 // Capture trusted server configuration, never merge it with client join options.
-export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, countdownMs, maxRooms = 4, log }) {
+export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, countdownMs, voteMs = VOTE_MS, maxRooms = 4, log }) {
   return class PartyRoom extends Room {
     onCreate(options) {
       // Check and reserve synchronously so concurrent matchmaking requests
@@ -46,11 +49,23 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.accumulator = 0;
       this.roundGame = null;
       this.awardedRound = 0;
-      this.state.tiles.push(...Array(ARENA.columns * ARENA.rows).fill(TILE_SAFE));
-      this.state.tileGoneAtMs.push(...Array(ARENA.columns * ARENA.rows).fill(0));
+      this.state.selectedGames.push('platform');
+      prepareMap(this.state);
       this.patchRate = 1000 / PATCH_HZ;
       this.maxMessagesPerSecond = 120;
-      this.onMessage('start', (client) => this.startRound(client));
+      this.onMessage('start', (client) => this.startSession(client));
+      this.onMessage('kick', (client, id) => this.kick(client, id));
+      this.onMessage('vote', (client, ballot) => this.vote(client, ballot));
+      this.onMessage('skin', (client, skin) => {
+        const player = this.playerFor(client);
+        if (this.state.phase === 'lobby' && player?.connected && SKINS.includes(skin)) player.skin = skin;
+      });
+      this.onMessage('games', (client, ids) => {
+        if (this.state.phase !== 'lobby' || !this.isHost(client) || !Array.isArray(ids) ||
+            !ids.length || ids.length > Object.keys(games).length || new Set(ids).size !== ids.length ||
+            !ids.every(id => typeof id === 'string' && Object.hasOwn(games, id))) return;
+        this.state.selectedGames.splice(0, this.state.selectedGames.length, ...ids);
+      });
       this.onMessage('replay', (client) => this.replay(client));
       this.onMessage('input', (client, input) => this.acceptInput(client, input));
       this.onMessage('clearInputs', (client) => this.clearInputs(client.userData?.playerId));
@@ -96,6 +111,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       const usedColors = new Set(Array.from(this.state.players.values(), (player) => player.color));
       const color = PLAYER_COLORS.find((entry) => !usedColors.has(entry)) ?? PLAYER_COLORS[0];
       const player = new PlayerState({ id, name: validateName(options?.name), color });
+      this.placeInLobby(player);
       client.userData = { playerId: id };
       this.state.players.set(id, player);
       this.inputState.set(id, this.freshInputState());
@@ -104,7 +120,8 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       log('joined', this.roomId, this.state.players.size);
     }
 
-    onDrop(client) {
+    onDrop(client, code) {
+      if (code === KICK_CODE) return; // Colyseus calls onLeave when no reservation is made.
       const player = this.playerFor(client);
       if (!player) return;
       player.connected = false;
@@ -145,6 +162,24 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
 
     playerFor(client) {
       return this.state.players.get(client.userData?.playerId);
+    }
+
+    isHost(client) {
+      const player = this.playerFor(client);
+      return player?.connected && player.id === this.state.hostId;
+    }
+
+    kick(client, id) {
+      if (!this.isHost(client) || id === this.state.hostId || !this.state.players.has(id)) return;
+      const target = this.clients.find(peer => peer.userData?.playerId === id);
+      if (target) this.kickClient(target.sessionId, KICK_CODE, 'Removed by the host');
+      else this.recoveryReservations.get(id)?.reservation.reject(false);
+    }
+
+    placeInLobby(player) {
+      const seat = PLAYER_COLORS.indexOf(player.color);
+      player.x = 64 + seat % 4 * 104;
+      player.y = 104 + Math.floor(seat / 4) * 112;
     }
 
     sendWelcome(client) {
@@ -192,7 +227,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
 
     acceptInput(client, data) {
       const player = this.playerFor(client);
-      if (!player?.connected || !player.alive || !player.participating || this.state.phase !== 'playing') return;
+      if (!canMoveInParty(this.state.phase, player)) return;
       if (!data || !Number.isSafeInteger(data.seq) || data.seq <= 0 ||
           !Number.isFinite(data.x) || !Number.isFinite(data.y) || Math.abs(data.x) > 1 || Math.abs(data.y) > 1) return;
       const input = this.inputState.get(player.id);
@@ -208,14 +243,56 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       input.queue.push({ ...normalizeInput(data), seq: data.seq, receivedAt: now });
     }
 
-    startRound(client) {
-      const player = this.playerFor(client);
-      if (!player || player.id !== this.state.hostId || this.state.phase !== 'lobby') return;
-      const connected = Array.from(this.state.players.values()).filter((entry) => entry.connected);
-      if (connected.length < 2) {
+    connectedCount() {
+      return Array.from(this.state.players.values()).filter(p => p.connected).length;
+    }
+
+    startSession(client) {
+      if (!this.isHost(client) || this.state.phase !== 'lobby') return;
+      if (this.connectedCount() < 2) {
         client.send('notice', { message: 'At least two connected players are needed to start.' });
         return;
       }
+      this.state.sessionRound = 0;
+      this.state.sessionLength = 1;
+      this.state.sessionResult = '';
+      this.state.sessionWinnerIds.clear();
+      for (const p of this.state.players.values()) {
+        p.sessionPoints = 0;
+        this.clearInputs(p.id);
+      }
+      this.openVote('lengthVote');
+    }
+
+    openVote(phase) {
+      this.state.phase = phase;
+      this.state.phaseEndsAt = Date.now() + voteMs;
+      for (const p of this.state.players.values()) p.vote = '';
+    }
+
+    vote(client, ballot) {
+      const { phase, round, phaseEndsAt } = this.state;
+      const p = this.playerFor(client);
+      if (!p?.connected || !ballot || ballot.phase !== phase || ballot.round !== round || Date.now() >= phaseEndsAt) return;
+      const choices = phase === 'lengthVote' ? SESSION_CHOICES : phase === 'mapVote' ? MAP_CHOICES : [];
+      if (choices.includes(ballot.choice)) p.vote = ballot.choice;
+    }
+
+    closeVote() {
+      const players = this.state.players.values();
+      this.nextMap = 'classic';
+      if (this.state.phase === 'lengthVote') {
+        this.state.sessionLength = Number(winningChoice(players, SESSION_CHOICES, '1'));
+      } else {
+        this.nextMap = winningChoice(players, MAP_CHOICES, 'classic');
+      }
+      this.state.phase = 'waiting';
+      this.state.phaseEndsAt = 0;
+    }
+
+    startRound() {
+      this.state.gameId = this.state.selectedGames[this.state.sessionRound % this.state.selectedGames.length];
+      this.state.sessionRound += 1;
       this.state.round += 1;
       this.state.resultText = '';
       this.state.winnerIds.clear();
@@ -223,7 +300,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         entry.roundPoints = 0;
         this.clearInputs(entry.id);
       }
-      this.roundGame = createRound(this.state);
+      this.roundGame = games[this.state.gameId].createRound(this.state, this.nextMap);
       this.state.phase = 'countdown';
       this.state.phaseEndsAt = Date.now() + countdownMs;
       log('countdown', this.roomId, this.state.round);
@@ -234,14 +311,12 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.state.phase = 'lobby';
       this.state.phaseEndsAt = 0;
       this.state.roundElapsedMs = 0;
-      this.state.tiles.clear();
-      this.state.tiles.push(...Array(ARENA.columns * ARENA.rows).fill(TILE_SAFE));
-      this.state.tileGoneAtMs.clear();
-      this.state.tileGoneAtMs.push(...Array(ARENA.columns * ARENA.rows).fill(0));
+      prepareMap(this.state);
       this.roundGame = null;
       for (const player of this.state.players.values()) {
         player.alive = false;
         player.participating = false;
+        this.placeInLobby(player);
         this.clearInputs(player.id);
       }
     }
@@ -262,12 +337,14 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       const now = Date.now();
       this.state.serverTime = now;
       this.state.tick += 1;
+      if (['lengthVote', 'mapVote'].includes(this.state.phase) && now >= this.state.phaseEndsAt) this.closeVote();
+      if (this.state.phase === 'waiting' && this.connectedCount() >= 2) this.startRound();
       if (this.state.phase === 'countdown' && now >= this.state.phaseEndsAt) {
         this.state.phase = 'playing';
         this.state.phaseEndsAt = 0;
         log('playing', this.roomId, this.state.round);
       }
-      if (this.state.phase !== 'playing') return;
+      if (this.state.phase !== 'playing' && this.state.phase !== 'lobby') return;
       const inputs = new Map();
       for (const [id, input] of this.inputState) {
         const player = this.state.players.get(id);
@@ -280,7 +357,14 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
           if (player.connected) inputs.set(id, command);
         }
       }
-      const result = updateRound(this.state, this.roundGame, { dtMs: STEP_MS, inputs });
+      if (this.state.phase === 'lobby') {
+        for (const [id, input] of inputs) {
+          const p = this.state.players.get(id);
+          Object.assign(p, movePlayer(p, input, STEP_MS / 1000));
+        }
+        return;
+      }
+      const result = games[this.state.gameId].updateRound(this.state, this.roundGame, { dtMs: STEP_MS, inputs });
       if (!result || this.awardedRound === this.state.round) return;
       this.awardedRound = this.state.round;
       this.state.phase = 'results';
@@ -291,7 +375,20 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       for (const player of this.state.players.values()) {
         player.roundPoints = result.pointsByPlayer[player.id] ?? 0;
         player.score += player.roundPoints;
+        player.sessionPoints += player.roundPoints;
         this.clearInputs(player.id);
+      }
+      if (this.state.sessionRound < this.state.sessionLength) {
+        this.openVote('mapVote');
+      } else {
+        const players = [...this.state.players.values()];
+        const high = Math.max(0, ...players.map(p => p.sessionPoints));
+        const winners = players.filter(p => high > 0 && p.sessionPoints === high);
+        this.state.sessionWinnerIds.push(...winners.map(p => p.id));
+        const names = winners.map(p => p.name).join(' & ');
+        this.state.sessionResult = winners.length
+          ? `${names} ${winners.length === 1 ? 'wins' : 'tie for'} the session with ${high} ${high === 1 ? 'point' : 'points'}!`
+          : 'Session complete. No points awarded.';
       }
       log('results', this.roomId, this.state.round, result.reason);
     }

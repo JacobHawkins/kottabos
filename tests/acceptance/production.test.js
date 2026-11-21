@@ -81,6 +81,9 @@ test('built production serves only public assets and completes the multiplayer r
   const authoritative = server.rooms.get(host.roomId);
   const [hostId, guestId] = authoritative.state.players.keys();
   host.send('start');
+  await until(() => host.state.phase === 'lengthVote', 'opening a session starts the five-second ballot');
+  assert.ok(host.state.phaseEndsAt - host.state.serverTime > 4500 && host.state.phaseEndsAt - host.state.serverTime <= 5050);
+  await until(() => host.state.phase === 'playing', 'an empty ballot starts one round', 8000);
   await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'production round reaches shared results');
   assert.deepEqual([...host.state.winnerIds], [...guest.state.winnerIds]);
   assert.equal(host.state.players.get(hostId).score, 1, 'simultaneous fall scores once');

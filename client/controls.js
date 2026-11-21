@@ -1,5 +1,7 @@
 import { STEP_MS } from '../shared/constants.js';
 import { movePlayer, normalizeInput } from '../shared/movement.js';
+import { canMoveInParty } from '../shared/party.js';
+import { arenaFor } from '../shared/arena.js';
 
 const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const TOUCH_SETTING = 'kottabos.touch-controls';
@@ -116,12 +118,11 @@ export class Controls {
     this.joystick.setAttribute('aria-disabled', String(!this.canMove()));
     this.hint.textContent = this.canMove() ? 'Drag to move. Release to stop.'
       : this.session.connection !== 'connected' ? 'Movement pauses while reconnecting.'
-        : this.session.state?.phase === 'lobby' ? 'The host starts the round. Drag here when play begins.'
-          : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
+        : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
   }
 
   get me() { return this.session.state?.players[this.session.playerId]; }
-  canMove() { return this.session.connection === 'connected' && this.session.state?.phase === 'playing' && this.me?.alive && this.me?.participating; }
+  canMove() { return this.session.connection === 'connected' && canMoveInParty(this.session.state?.phase, this.me); }
   direction() {
     return normalizeInput({
       x: this.touch.x + Number(this.keys.has('KeyD') || this.keys.has('ArrowRight')) - Number(this.keys.has('KeyA') || this.keys.has('ArrowLeft')),
@@ -165,7 +166,7 @@ export class Controls {
     // The server consumes at most one command per tick, regardless of send rate.
     this.pending = this.pending.filter((input) => input.seq > me.lastInputSeq);
     let predicted = { x: me.x, y: me.y };
-    for (const input of this.pending) predicted = movePlayer(predicted, input, STEP_MS / 1000);
+    for (const input of this.pending) predicted = movePlayer(predicted, input, STEP_MS / 1000, this.arena);
     this.correction = this.predicted ? Math.hypot(predicted.x - this.predicted.x, predicted.y - this.predicted.y) : 0;
     this.predicted = predicted;
   }
@@ -181,14 +182,16 @@ export class Controls {
       const input = { ...this.direction(), seq: ++this.sequence };
       if (!this.session.send('input', input)) { this.clear(); break; }
       this.pending.push(input);
-      this.predicted = movePlayer(this.predicted, input, STEP_MS / 1000);
+      this.predicted = movePlayer(this.predicted, input, STEP_MS / 1000, this.arena);
     }
   }
+
+  get arena() { return arenaFor(this.session.state); }
 
   position() {
     if (!this.predicted) return null;
     // Fractional-tick preview responds on the next animation frame, even before
     // the next 30 Hz command is sent. It never changes authoritative outcomes.
-    return this.canMove() ? movePlayer(this.predicted, this.direction(), this.accumulator / 1000) : this.predicted;
+    return this.canMove() ? movePlayer(this.predicted, this.direction(), this.accumulator / 1000, this.arena) : this.predicted;
   }
 }

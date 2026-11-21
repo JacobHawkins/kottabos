@@ -13,8 +13,24 @@
     <div class="shell">
       <header class="masthead">
         <a class="wordmark" href="/" aria-label="Kottabos home"><span class="brand-mark">k</span> kottabos<span class="edition">YOUR PEOPLE / ONE FLOOR</span></a>
-        <div class="session-actions"><span id="connection-status" class="status" role="status">Connecting…</span><button id="leave-button" class="text-button" hidden>Leave party ↗</button></div>
+        <div class="session-actions">
+          <button id="manage-party" class="text-button" popovertarget="manage-panel" hidden>Players</button>
+          <button id="music-button" class="text-button" popovertarget="music-panel" hidden>Music</button>
+          <span id="connection-status" class="status" role="status">Connecting…</span><button id="leave-button" class="text-button" hidden>Leave party ↗</button>
+        </div>
       </header>
+      <div popover id="music-panel" class="settings-panel">
+        <h2>Music</h2>
+        <label for="music-volume">Volume</label>
+        <input type="range" id="music-volume" min="0" max="100" step="1" />
+        <button id="music-mute" class="secondary">Mute music</button>
+        <button id="music-status" class="text-button"></button>
+      </div>
+      <audio id="party-audio" preload="none" loop></audio>
+      <div popover id="manage-panel" class="settings-panel">
+        <h2>Manage players</h2><ul id="kick-list" class="players-list"></ul>
+        <button class="secondary" popovertarget="manage-panel" popovertargetaction="hide">Done</button>
+      </div>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="tab-blocked" class="panel blocked" hidden>
         <span class="eyebrow">ONE PLAYER PER BROWSER</span>
@@ -28,7 +44,7 @@
           <h1>A little<br />friendly <em>chaos.</em></h1>
           <p class="lede">Bring your people. Find your footing.<br />Try to be the last one standing.</p>
           <div class="home-tags"><span>NO ACCOUNTS</span><span>TOUCH OR KEYS</span><span>QUICK ROUNDS</span></div>
-          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Gather your people.</strong> The host starts the round.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> Every tile you step on starts to fall.</p></div>
+          <div class="how-to"><span class="step-number">01</span><p><strong>Make a party.</strong> Share the link or room code.</p><span class="step-number">02</span><p><strong>Gather your people.</strong> Vote on the session length.</p><span class="step-number">03</span><p><strong>Keep moving.</strong> Every tile you step on starts to fall.</p></div>
         </section>
         <section class="panel join-panel">
           <div class="tile-emblem" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="warning-tile"></i><i></i><i></i><i></i><i class="missing-tile"></i><b>●</b></div>
@@ -55,8 +71,14 @@
             <p id="invitation-feedback" class="muted">Share this code or copy your party link.</p>
             <label class="sr-only" for="invite-link">Invitation link</label><input id="invite-link" readonly aria-label="Invitation link" />
             <div class="party-actions">
-              <button id="start-button" class="primary full" hidden>Start round</button>
-              <button id="replay-button" class="primary full" hidden>Play again</button>
+              <div id="lobby-settings">
+                <label for="skin-choice">Your avatar</label>
+                <div class="skin-row"><select id="skin-choice"><option value="sprite">Original sprite</option><option value="circle">Circle</option><option value="square">Square</option><option value="triangle">Triangle</option></select>
+                <button id="lock-skin" class="secondary" type="button">Lock in</button></div>
+                <fieldset id="game-choices"><legend>Session minigames</legend></fieldset>
+              </div>
+              <button id="start-button" class="primary full" hidden>Begin session</button>
+              <button id="replay-button" class="primary full" hidden>Return to lobby</button>
               <p id="lobby-hint" class="fine-print"></p>
             </div>
             <div class="roster-heading"><span>PLAYERS</span><span id="player-count"></span></div>
@@ -67,6 +89,9 @@
         </aside>
         <section class="arena-column">
           <div class="arena-heading"><div><div id="round-label" class="eyebrow">STAY ON THE PLATFORM</div><h1 id="phase-label">Lobby</h1></div><div class="round-clock"><span id="timer-value">—</span><span id="timer-label">HOST STARTS THE ROUND</span></div></div>
+          <section id="vote-panel" class="panel vote-panel" hidden>
+            <h2 id="vote-title"></h2><p id="vote-hint"></p><div id="vote-options" class="vote-options"></div>
+          </section>
           <div class="play-area">
             <div class="stage"><div id="game-container" role="img" aria-label="Game arena: move with the touch joystick, W A S D, or arrow keys" tabindex="0"></div><div id="stage-banner" class="stage-banner"><span>Waiting for the gang</span></div></div>
             <div class="touch-options">
@@ -78,7 +103,7 @@
             </div>
           </div>
           <div class="arena-footer"><span><i class="legend safe"></i> UNTOUCHED</span><span><i class="legend warning"></i> FALLS IN 1.8s</span><span><i class="legend gone"></i> GONE</span><span id="player-mode">YOU’VE GOT THIS</span></div>
-          <section id="results-panel" class="panel results-panel" hidden><span class="eyebrow">ROUND COMPLETE</span><h2 id="result-text"></h2><p id="results-detail"></p></section>
+          <section id="results-panel" class="panel results-panel" hidden><span class="eyebrow">SESSION COMPLETE</span><h2 id="session-result"></h2><p id="result-text"></p><p id="results-detail"></p></section>
         </section>
       </main>
       <footer class="site-footer"><span>Character art: Universal LPC contributors · <a id="character-credits" href="https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/blob/82283ac096a760c46b22336df3fc2a23f43e3fda/CREDITS.csv" download="character-credits.csv">Credits</a> · <a href="https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/blob/82283ac096a760c46b22336df3fc2a23f43e3fda/README.md#licensing-and-attribution-credits" target="_blank" rel="noopener noreferrer">Art source &amp; licenses</a></span><span>SMALL GAME. GOOD COMPANY.</span></footer>

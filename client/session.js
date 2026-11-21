@@ -1,4 +1,5 @@
 import { Client } from '@colyseus/sdk';
+import { KICK_CODE } from '../shared/party.js';
 
 const STORAGE_KEY = 'kottabos.recovery.v1';
 const TAB_LOCK = 'kottabos.active-player.v1';
@@ -370,7 +371,8 @@ export class PartySession {
       if (!current()) return;
       this.room = null;
       this.detach();
-      if (code === 4000) this.end('You left the party. Join with a code whenever you want to play again.');
+      if (code === KICK_CODE) this.end('The host removed you from the party.');
+      else if (code === 4000) this.end('You left the party. Join with a code whenever you want to play again.');
       else if (code === 4001) this.end('The server stopped. Your party has ended. Start the server and create a new party.');
       else this.recover();
     });

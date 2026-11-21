@@ -1,5 +1,11 @@
 # Verification record
 
+## November 21, 2026 - local session and lobby checks
+
+Chrome and Edge completed the development and bundled production suites. A three-round browser session exercised a changed ballot, the 98-tile board, a random silhouette, mid-round admission and next-round participation, a shared session win, and a host kick. The browsers loaded the supplied MP3s, advanced playback, changed tracks, and recovered the guest's skin, mute and volume settings after refresh.
+
+Protocol tests checked five automatic rounds, a host-selected rotation with a test-only second registry entry, a pause for a second player, rejection of guest moderation, and release of connected and reserved seats. The twelve-client acceptance test exercised capacity, recovery, scores and replay. Map checks covered all five connected silhouettes and twelve distinct playable spawns on each. Mobile layout and joystick checks used emulation.
+
 ## September 20, 2026 — test branch and automatic release pipeline
 
 The owner requested development/testing on a separate branch and automatic Render releases from `main`. Before this setup, GitHub `main` was at `2c34a1f09c49690d9ab7018a87efc8af7c8ebb0b`, Render was serving `682090227c5d099f337315c12ce034b27b0e526f`, and the player-triggered floor, focus UI and sprite changes existed only locally. Work moved to `codex/test` without discarding those changes.
