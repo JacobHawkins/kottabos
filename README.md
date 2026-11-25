@@ -1,6 +1,6 @@
 # Kottabos
 
-A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of one, three or five rounds of Stay on the Platform, Jump Rope, or both. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of **3, 5 or 10 rounds** from seven minigames. The same party keeps its scores between rounds.
 
 **Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the joystick on the tiles. On the rope court, press Space or tap. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
