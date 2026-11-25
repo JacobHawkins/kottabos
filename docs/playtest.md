@@ -40,3 +40,17 @@ Record date, service revision/region, phone model, iOS version, browser, approxi
 | End session | Leave Party and close tabs; check usage below stop thresholds |
 
 Two-minute reservations begin when the server detects disconnection. Background browsers may be suspended; they do not continue simulating locally or keep seats forever. Rejoining requires the same profile and retained site data. A server restart or idle shutdown loses all parties/scores. Cross-device identity transfer is outside scope.
+
+## November expansion playtest
+
+Try 3-, 5- and 10-round sessions and select each new game in the lobby. Record the player count, devices/browsers and whether participants used separate networks.
+
+- Jump Rope: compare repeated taps with the previous jump. The new 300 ms jump can restart immediately on landing. Check whether the shorter safe window still feels fair.
+- Wind-up Rally: use touch and Space; compare fast and slow tapping, watch the toys travel different distances, and confirm the farthest gets +1. Refresh during winding and during the race.
+- Neon Trails: steer early, test your own and other players' trails and an edge. Once eliminated, move the eraser and clear a path for a survivor. Check how twelve starting lanes feel.
+- Maze Munch: compete for dots, use a power star to catch a ghost, and take three ghost hits. Check that the highest collected score wins even if that player was eliminated.
+- Dash & Duck: jump orange hurdles and duck purple bars. After three dings, aim at another runner and stun them. Check that the shot cooldown and target protection feel fair.
+- Bomb Garden: escape your own fuse, break crates, collect both upgrades, and try a chain reaction. Once eliminated, repeatedly request random bombs and check the visible fuse gives survivors a chance to escape.
+- Refresh or briefly disconnect in each game, including every post-elimination role. Identity, party/session points and elimination must persist. Try joystick movement with a second finger on the action button, then rotate the phone.
+
+Current automated phone checks use Chrome touch/viewport emulation. New-game balance, physical iPhone Safari, real network input latency and a family playtest remain human acceptance work.

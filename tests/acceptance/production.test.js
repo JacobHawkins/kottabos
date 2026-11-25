@@ -38,7 +38,7 @@ function chunkedPost(url, chunks) {
   });
 }
 
-test('built production serves only public assets and completes the multiplayer round/recovery/replay loop', { timeout: 15_000 }, async (t) => {
+test('built production serves only public assets and completes the multiplayer round/recovery/replay loop', { timeout: 40_000 }, async (t) => {
   const server = await createProductionServer({ port: 0, countdownMs: 50, log: false });
   await server.listen();
   const endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
@@ -83,11 +83,13 @@ test('built production serves only public assets and completes the multiplayer r
   host.send('start');
   await until(() => host.state.phase === 'lengthVote', 'opening a session starts the five-second ballot');
   assert.ok(host.state.phaseEndsAt - host.state.serverTime > 4500 && host.state.phaseEndsAt - host.state.serverTime <= 5050);
-  await until(() => host.state.phase === 'playing', 'an empty ballot starts one round', 8000);
-  await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'production round reaches shared results');
+  await until(() => host.state.phase === 'playing', 'an empty ballot starts three rounds', 8000);
+  await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'production session reaches shared results', 25000);
+  assert.equal(host.state.sessionLength, 3);
+  assert.equal(host.state.sessionRound, 3);
   assert.deepEqual([...host.state.winnerIds], [...guest.state.winnerIds]);
-  assert.equal(host.state.players.get(hostId).score, 1, 'simultaneous fall scores once');
-  assert.equal(guest.state.players.get(guestId).score, 1);
+  assert.equal(host.state.players.get(hostId).score, 3, 'simultaneous fall scores once');
+  assert.equal(guest.state.players.get(guestId).score, 3);
   const token = guest.reconnectionToken;
   guest.reconnection.enabled = false;
   guest.connection.close(4010, 'production recovery acceptance');
@@ -95,11 +97,11 @@ test('built production serves only public assets and completes the multiplayer r
   guest = track(await client.reconnect(token));
   await until(() => guest.state.players?.get(guestId)?.connected, 'production identity recovers');
   assert.equal(guest.state.players.get(guestId).alive, false);
-  assert.equal(guest.state.players.get(guestId).score, 1);
+  assert.equal(guest.state.players.get(guestId).score, 3);
   assert.notEqual(guest.reconnectionToken, token);
   host.send('replay');
   await until(() => host.state.phase === 'lobby' && guest.state.phase === 'lobby', 'built service supports replay');
-  assert.equal(guest.state.players.get(guestId).score, 1, 'replay preserves scores');
+  assert.equal(guest.state.players.get(guestId).score, 3, 'replay preserves scores');
 });
 
 test('public HTTP and WebSocket guards reject foreign origins, oversized bodies and forged-IP rate bypass', { timeout: 15_000 }, async (t) => {

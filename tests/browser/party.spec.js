@@ -232,6 +232,8 @@ test('Player-triggered floors, focused arena, movement, recovery, results and ho
   await countPlayers(host, 3);
   const lobbySize = await host.locator('.stage').boundingBox();
   await startRound(host, [guest, third]);
+  await expect(host.locator('#round-label')).toContainText('Round 3 of 3', { timeout: 25000 });
+  await expect.poll(async () => (await snapshot(host)).phase).toBe('playing');
   const hostId = (await snapshot(host)).playerId;
   const guestId = (await snapshot(guest)).playerId;
   let stopSurvivors = [followVisibleSafeFloor(host), followVisibleSafeFloor(third)];
@@ -303,7 +305,7 @@ test('Player-triggered floors, focused arena, movement, recovery, results and ho
     await replayHost.locator('#replay-button').click();
     await expect.poll(async () => (await snapshot(host)).phase).toBe('lobby');
     await startRound(replayHost, all.filter(page => page !== replayHost));
-    expect((await snapshot(host)).round).toBe(2);
+    expect((await snapshot(host)).round).toBe(4);
     expect((await snapshot(host)).players.every(player => player.alive && player.participating)).toBe(true);
   } finally {
     await Promise.all(stopSurvivors.map(stop => stop()));

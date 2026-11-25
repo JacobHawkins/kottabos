@@ -1,6 +1,6 @@
 export const STRIKES_OUT = 3;
-export const JUMP_MS = 560;
-export const NEXT_JUMP_MS = 740;
+export const JUMP_MS = 300;
+export const NEXT_JUMP_MS = 300;
 
 // Collision and drawing use the same arc. The leading/trailing few frames
 // leave the feet low enough for the rope to clip them.

@@ -2,6 +2,7 @@ import { chromium, expect, test } from '@playwright/test';
 import { Client } from '@colyseus/sdk';
 
 test('a jumper can tap, use Space, recover at the handle and speed up the surviving players', async ({ baseURL }, testInfo) => {
+  test.setTimeout(120000);
   const browser = await chromium.launch({ channel: 'chrome' });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const errors = [];
@@ -26,9 +27,10 @@ test('a jumper can tap, use Space, recover at the handle and speed up the surviv
     practice = setInterval(() => {
       for (const [i, bot] of bots.entries()) {
         const s = bot.room.state;
-        if ((!keepBothJumping && i === 1) || s.phase !== 'playing' || s.ropeSwing === bot.lastSwing) continue;
+        if (bot.round !== s.round) { bot.round = s.round; bot.lastSwing = 0; }
+        if (s.sessionRound < 3 || (!keepBothJumping && i === 1) || s.phase !== 'playing' || s.ropeSwing === bot.lastSwing) continue;
         const untilContact = s.ropeHitMs - s.roundElapsedMs;
-        if (untilContact >= 120 && untilContact <= 330) {
+        if (untilContact >= 80 && untilContact <= 190) {
           bot.room.send('action', { action: 'jump', round: s.round, swing: s.ropeSwing });
           bot.lastSwing = s.ropeSwing;
         }
@@ -41,10 +43,11 @@ test('a jumper can tap, use Space, recover at the handle and speed up the surviv
     await expect.poll(() => Array.from(state().selectedGames)).toEqual(['rope']);
     await page.locator('#start-button').tap();
     const button = page.locator('#rope-action');
+    await expect(page.locator('#round-label')).toContainText('Round 3 of 3', { timeout: 85000 });
     await expect(button).toBeEnabled();
     await expect(page.locator('#game-container canvas')).toHaveAttribute('width', '640');
     const court = page.locator('#game-container');
-    await expect.poll(() => state().ropeHitMs - state().roundElapsedMs, { intervals: [20] }).toBeLessThan(340);
+    await expect.poll(() => state().ropeHitMs - state().roundElapsedMs, { intervals: [20] }).toBeLessThan(220);
     await court.tap();
     await expect.poll(() => jumper().jumpedAtMs).toBeGreaterThan(0);
     await expect.poll(() => state().ropeSwing).toBe(2);

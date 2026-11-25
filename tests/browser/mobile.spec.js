@@ -27,6 +27,7 @@ async function noHorizontalOverflow(page) {
 }
 
 test('phone portrait/landscape controls move, release outside, cancel, and preserve shared rounds', async ({ baseURL }, testInfo) => {
+  test.setTimeout(150000);
   const browser = await chromium.launch({ channel: process.env.TEST_HOST_BROWSER || 'chrome' });
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const desktop = await browser.newContext({ viewport: { width: 1360, height: 900 } });
@@ -63,7 +64,7 @@ test('phone portrait/landscape controls move, release outside, cancel, and prese
       await expect(host.locator('#leave-button')).toBeVisible();
     };
     const finishRound = async () => {
-      await expect(host.locator('#results-panel')).toBeVisible({ timeout: 6_000 });
+      await expect(host.locator('#results-panel')).toBeVisible({ timeout: 25_000 });
       await expect(guest.locator('#result-text')).toHaveText(await host.locator('#result-text').textContent());
       await expect(host.locator('#joystick')).toHaveAttribute('aria-disabled', 'true');
       await expect(host.locator('body')).not.toHaveClass('is-playing');

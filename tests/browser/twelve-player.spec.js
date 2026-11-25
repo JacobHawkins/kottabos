@@ -6,7 +6,7 @@ import { MAX_PLAYERS } from '../../shared/constants.js';
 // dimensions/touch are emulated; this is not twelve physical-phone evidence.
 test('twelve-player party fits phone layouts, keeps numbered identities and replays', async ({ baseURL }, testInfo) => {
   const chrome = await chromium.launch({ channel: 'chrome' });
-  const edge = await chromium.launch({ channel: 'msedge' });
+  const edge = await chromium.launch({ channel: process.env.TEST_GUEST_BROWSER || 'msedge' });
   const phone = await chrome.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const host = await phone.newPage();
   const guest = await edge.newPage({ viewport: { width: 1360, height: 1000 } });

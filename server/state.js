@@ -20,7 +20,26 @@ export const PlayerState = schema({
   jumpedAtMs: t.number().default(-1),
   dingAtMs: t.number().default(-1),
   pulledSwing: t.number().default(0),
+  lane: t.number().default(0),
+  charge: t.number().default(0),
+  distance: t.number().default(0),
+  hits: t.uint8().default(0),
+  collected: t.number().default(0),
+  power: t.uint8().default(2),
+  capacity: t.uint8().default(1),
+  facing: t.uint8().default(0),
+  actionAtMs: t.number().default(-10000),
+  duckUntilMs: t.number().default(0),
+  stunnedUntilMs: t.number().default(0),
+  immuneUntilMs: t.number().default(0),
+  powerUntilMs: t.number().default(0),
 }, 'PlayerState');
+
+export const EntityState = schema({
+  id: t.string().default(''), kind: t.string().default(''), owner: t.string().default(''),
+  x: t.number().default(0), y: t.number().default(0),
+  due: t.number().default(0), power: t.number().default(0),
+}, 'EntityState');
 
 export const PartyState = schema({
   code: t.string().default(''),
@@ -28,7 +47,7 @@ export const PartyState = schema({
   phase: t.string().default('lobby'),
   round: t.number().default(0),
   sessionRound: t.number().default(0),
-  sessionLength: t.number().default(1),
+  sessionLength: t.number().default(3),
   sessionResult: t.string().default(''),
   sessionWinnerIds: t.array('string'),
   gameId: t.string().default('platform'),
@@ -38,6 +57,12 @@ export const PartyState = schema({
   rows: t.number().default(7),
   phaseEndsAt: t.number().default(0),
   roundElapsedMs: t.number().default(0),
+  gameStage: t.string().default(''),
+  stageEndsMs: t.number().default(0),
+  gameEndsMs: t.number().default(0),
+  cellSize: t.number().default(64),
+  cells: t.array('uint8'),
+  entities: t.array(EntityState),
   ropeSwing: t.number().default(0),
   ropeStartMs: t.number().default(0),
   ropeHitMs: t.number().default(0),

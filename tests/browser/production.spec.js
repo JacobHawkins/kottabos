@@ -1,7 +1,7 @@
 import { chromium, expect, test } from '@playwright/test';
 
 test('built app: Chrome/Edge invitation, host stability, round, recovery, results and replay', async ({ baseURL }, testInfo) => {
-  const browsers = await Promise.all([chromium.launch({ channel: 'chrome' }), chromium.launch({ channel: 'msedge' })]);
+  const browsers = await Promise.all([chromium.launch({ channel: process.env.TEST_HOST_BROWSER || 'chrome' }), chromium.launch({ channel: process.env.TEST_GUEST_BROWSER || 'msedge' })]);
   const errors = [];
   const socketProtocols = [];
   const spriteResponses = new Map();
@@ -84,7 +84,7 @@ test('built app: Chrome/Edge invitation, host stability, round, recovery, result
 });
 
 test('built app: cold-host HTML retries and cancel is immediate', async ({ baseURL }) => {
-  const browser = await chromium.launch({ channel: 'chrome' });
+  const browser = await chromium.launch({ channel: process.env.TEST_HOST_BROWSER || 'chrome' });
   try {
     const page = await browser.newPage();
     let requests = 0;
