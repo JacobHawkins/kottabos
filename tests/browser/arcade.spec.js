@@ -45,6 +45,7 @@ for (const [gameId, title] of Object.entries(games)) {
       }, 40);
       await page.getByLabel(title, { exact: true }).check();
       await page.getByLabel('Stay on the Platform', { exact: true }).uncheck();
+      await expect.poll(() => [...state().selectedGames]).toEqual([gameId]);
       await page.locator('#start-button').tap();
       await expect(page.locator('[data-choice]')).toHaveCount(3);
       await expect(page.locator('[data-choice="10"]')).toBeVisible();

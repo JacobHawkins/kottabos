@@ -17,6 +17,7 @@ if (import.meta.env.DEV) {
 }
 let session, controls, game, loadingGame;
 let lastRoster = '';
+let pendingGames = null;
 let clockOffset = 0;
 const invitationCode = new URL(location.href).searchParams.get('room')?.toUpperCase() || '';
 if (/^[A-Z]{6}$/.test(invitationCode)) $('room-code').value = invitationCode;
@@ -54,6 +55,7 @@ async function ensureGame() {
 }
 
 function reset() {
+  pendingGames = null;
   music('');
   $('manage-panel').hidePopover();
   $('music-panel').hidePopover();
@@ -143,6 +145,13 @@ function renderRoster(state) {
 
 function renderOptions(state, me, host, online) {
   const lobby = state.phase === 'lobby';
+  // Keep a host's click visible while its ordered server acknowledgement is
+  // in flight. Unrelated 20 Hz patches must not undo it between pointerup and
+  // the reply, or a quick second selection can accidentally drop the first.
+  if (pendingGames && (!lobby || !host || !online || pendingGames.code !== state.code ||
+      performance.now() >= pendingGames.expiresAt ||
+      JSON.stringify(pendingGames.ids) === JSON.stringify(state.selectedGames))) pendingGames = null;
+  const selectedGames = pendingGames?.ids || state.selectedGames;
   $('lobby-settings').hidden = !lobby;
   if (!lobby) $('skin-choice').removeAttribute('data-locked');
   if (lobby && me && $('skin-choice').dataset.locked !== me.skin) {
@@ -155,8 +164,8 @@ function renderOptions(state, me, host, online) {
   $('lock-skin').textContent = locked ? 'Locked in' : 'Lock in';
   $('game-choices').hidden = !host;
   for (const option of $('game-choices').querySelectorAll('input')) {
-    option.checked = state.selectedGames.includes(option.value);
-    option.disabled = !online || (option.checked && state.selectedGames.length === 1);
+    option.checked = selectedGames.includes(option.value);
+    option.disabled = !online || (option.checked && selectedGames.length === 1);
   }
   $('manage-party').hidden = !host;
   $('manage-party').disabled = !online;
@@ -350,7 +359,10 @@ if (tabClaim === 'claimed') {
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.value = id;
-    input.onchange = () => session.send('games', [...$('game-choices').querySelectorAll('input:checked')].map(el => el.value));
+    input.onchange = () => {
+      const ids = [...$('game-choices').querySelectorAll('input:checked')].map(el => el.value);
+      if (session.send('games', ids)) pendingGames = { ids, code: session.state.code, expiresAt: performance.now() + 3000 };
+    };
     label.append(input, title);
     $('game-choices').append(label);
   }
