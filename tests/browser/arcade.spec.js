@@ -65,6 +65,15 @@ for (const [gameId, title] of Object.entries(games)) {
         await page.waitForTimeout(120);
         await page.keyboard.up('Space');
         expect(me().charge).toBeLessThanOrEqual(3);
+        await action.focus();
+        await page.waitForTimeout(100);
+        const beforeEnter = me().charge;
+        await page.keyboard.down('Enter');
+        await expect.poll(() => me().charge).toBe(beforeEnter + 1);
+        await page.keyboard.down('Enter'); // Repeated keydown on a focused native button.
+        await page.waitForTimeout(160);
+        await page.keyboard.up('Enter');
+        expect(me().charge).toBe(beforeEnter + 1);
       } else if (gameId === 'maze') {
         const before = me().x;
         await page.locator('#game-container').focus();

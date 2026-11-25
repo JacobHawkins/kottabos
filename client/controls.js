@@ -49,7 +49,9 @@ export class Controls {
     secondaryButton?.addEventListener('pointerdown', event => { if (event.button === 0) this.arcadeAction('duck'); });
     secondaryButton?.addEventListener('click', event => { if (event.detail === 0) this.arcadeAction('duck'); });
     window.addEventListener('keydown', (event) => {
-      if (event.code === 'Space' && (inRopeArena(this.session.state) || inArcade(this.session.state)) && this.session.state.phase === 'playing') {
+      const actionKey = event.code === 'Space' || event.key === 'Enter' &&
+        (event.target === actionButton || event.target === secondaryButton);
+      if (actionKey && (inRopeArena(this.session.state) || inArcade(this.session.state)) && this.session.state.phase === 'playing') {
         if (event.target !== actionButton && event.target !== secondaryButton && event.target.closest?.('input,textarea,select,button,a,[contenteditable=true]')) return;
         event.preventDefault();
         if (!event.repeat) {
