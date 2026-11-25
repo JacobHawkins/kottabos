@@ -85,6 +85,8 @@ for (const [gameId, title] of Object.entries(games)) {
         await action.tap();
         await expect.poll(() => state().entities.filter(e => e.kind === 'bomb').length).toBe(1);
         await expect(action).toHaveText('Random bomb');
+        // A revenge bomb landing in this blast chains immediately, before the next snapshot.
+        await expect.poll(() => state().entities.some(e => e.kind === 'flame')).toBe(false);
         await action.tap();
         await expect.poll(() => state().entities.some(e => e.kind === 'bomb' && e.owner === id)).toBe(true);
       } else if (gameId === 'trails') {
