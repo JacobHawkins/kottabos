@@ -361,7 +361,8 @@ if (tabClaim === 'claimed') {
     input.value = id;
     input.onchange = () => {
       const ids = [...$('game-choices').querySelectorAll('input:checked')].map(el => el.value);
-      if (session.send('games', ids)) pendingGames = { ids, code: session.state.code, expiresAt: performance.now() + 3000 };
+      if (ids.length && session.send('games', ids)) pendingGames = { ids, code: session.state.code, expiresAt: performance.now() + 3000 };
+      render(session.state);
     };
     label.append(input, title);
     $('game-choices').append(label);

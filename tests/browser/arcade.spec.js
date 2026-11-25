@@ -180,6 +180,9 @@ test('host selections stay checked across unrelated patches while acknowledgemen
     for (const send of queued.splice(0)) send();
     await expect.poll(() => [...observer.state.selectedGames]).toEqual(['maze', 'bombs']);
     await expect(maze).toBeChecked(); await expect(bombs).toBeChecked();
+    await maze.uncheck();
+    await expect(bombs).toBeDisabled();
+    await expect.poll(() => [...observer.state.selectedGames]).toEqual(['bombs']);
     await page.locator('#leave-button').click();
   } finally {
     hold = false;
