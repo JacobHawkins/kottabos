@@ -136,3 +136,54 @@ for (const [gameId, title] of Object.entries(games)) {
     }
   });
 }
+
+test('host selections stay checked across unrelated patches while acknowledgements are delayed', async ({ baseURL }) => {
+  const browser = await chromium.launch({ channel: process.env.TEST_HOST_BROWSER || 'chrome' });
+  let observer, hold = false;
+  const queued = [];
+  try {
+    const page = await browser.newPage();
+    await page.routeWebSocket('**', socket => {
+      const server = socket.connectToServer();
+      socket.onMessage(message => { if (hold) queued.push(() => server.send(message)); else server.send(message); });
+    });
+    await page.addInitScript(() => {
+      const RoutedWebSocket = window.WebSocket;
+      window.WebSocket = class extends RoutedWebSocket {
+        constructor(url, protocols) {
+          if (protocols !== undefined && typeof protocols !== 'string' && !Array.isArray(protocols)) {
+            throw new DOMException('Invalid WebSocket protocols', 'SyntaxError');
+          }
+          super(url, protocols);
+        }
+      };
+    });
+    await page.goto(baseURL);
+    await page.locator('#nickname').fill('Selection host');
+    await page.locator('#create-party').click();
+    await expect(page.locator('#connection-status')).toHaveAttribute('data-state', 'connected');
+    observer = await new Client(baseURL).joinById(await page.locator('#party-code').innerText(), { name: 'Observer' });
+    for (const type of ['welcome', 'notice', 'pong']) observer.onMessage(type, () => {});
+    await expect.poll(() => [...(observer.state.selectedGames || [])]).toEqual(['platform']);
+    hold = true;
+    const maze = page.getByLabel('Maze Munch', { exact: true });
+    const bombs = page.getByLabel('Bomb Garden', { exact: true });
+    await maze.check();
+    await page.waitForTimeout(250); // Five unrelated snapshots arrive without the selection acknowledgement.
+    await expect(maze).toBeChecked();
+    await bombs.check();
+    await page.getByLabel('Stay on the Platform', { exact: true }).uncheck();
+    await page.waitForTimeout(250);
+    await expect(maze).toBeChecked(); await expect(bombs).toBeChecked();
+    expect([...observer.state.selectedGames]).toEqual(['platform']);
+    hold = false;
+    for (const send of queued.splice(0)) send();
+    await expect.poll(() => [...observer.state.selectedGames]).toEqual(['maze', 'bombs']);
+    await expect(maze).toBeChecked(); await expect(bombs).toBeChecked();
+    await page.locator('#leave-button').click();
+  } finally {
+    hold = false;
+    await observer?.leave();
+    await browser.close();
+  }
+});
