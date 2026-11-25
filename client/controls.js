@@ -146,8 +146,11 @@ export class Controls {
     this.toggle.setAttribute('aria-pressed', String(this.touchEnabled));
     this.toggle.textContent = `Touch controls: ${this.touchEnabled ? 'on' : 'off'}`;
     this.joystick.setAttribute('aria-disabled', String(!this.canMove()));
-    this.hint.textContent = this.canMove() ? 'Drag to move. Release to stop.'
+    const autoSteer = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'trails' && this.me?.alive;
+    const autoRun = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'runner' && this.me?.alive;
+    this.hint.textContent = this.canMove() ? autoSteer ? 'Drag to steer. You keep moving.' : 'Drag to move. Release to stop.'
       : this.session.connection !== 'connected' ? 'Movement pauses while reconnecting.'
+        : autoRun ? 'You run automatically. Use Jump and Duck.'
         : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
   }
 
