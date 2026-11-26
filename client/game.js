@@ -3,6 +3,8 @@ import characterSheetUrl from './assets/character-spritesheet.png?url';
 import { ARENA, PLAYER_COLORS, TILE_WARNING, TILE_GONE, TILE_WARNING_MS } from '../shared/constants.js';
 import { arenaFor } from '../shared/arena.js';
 
+import { inArcade } from '../shared/arcade.js';
+import { ARCADE_PAD, arcadeHeadline, drawArcade, drawArcadePlayer } from './arcade-view.js';
 import { inRopeArena } from '../shared/rope.js';
 import { COURT_WIDTH, COURT_HEIGHT, drawCourt, drawRopePlayer } from './rope-view.js';
 
@@ -38,7 +40,7 @@ function createCharacter(scene, color, number, skin) {
     backgroundColor: '#102331', padding: { x: 5, y: 3 },
   }).setOrigin(.5);
   const container = scene.add.container(0, 0, [shadow, marker, ring, sprite, shape, badge, label]);
-  return { container, label, ring, sprite, number, skin, facing: 'down', moving: false,
+  return { container, label, ring, sprite, shape, marker, shadow, number, skin, facing: 'down', moving: false,
     previous: null, round: null, phase: null, wasAlive: null };
 }
 
@@ -107,6 +109,7 @@ export function createGame(session, controls) {
       this.board = this.add.graphics();
       this.ropeLayer = this.add.graphics();
       this.courtMarks = this.add.graphics().setDepth(2);
+      this.arcadeTitle = this.add.text(20, 5, '', { fontFamily: 'monospace', fontSize: '12px', color: '#cbe7dc' }).setDepth(1000);
       this.characters = new Map();
       this.samples = [];
       this.fps = 0;
@@ -144,14 +147,17 @@ export function createGame(session, controls) {
       const graphics = this.board;
       const arena = arenaFor(state);
       const rope = inRopeArena(state);
-      const width = rope ? COURT_WIDTH : arena.width + PADDING * 2;
-      const height = rope ? COURT_HEIGHT : arena.height + PADDING * 2;
+      const arcade = inArcade(state);
+      const width = rope ? COURT_WIDTH : arena.width + (arcade ? ARCADE_PAD : PADDING) * 2;
+      const height = rope ? COURT_HEIGHT : arena.height + (arcade ? ARCADE_PAD : PADDING) * 2;
       if (this.scale.width !== width || this.scale.height !== height) this.scale.setGameSize(width, height);
       graphics.clear();
       this.ropeLayer.clear();
       this.courtMarks.clear();
       const now = rope ? controls.ropeTime() : 0;
-      if (rope) drawCourt(graphics, this.ropeLayer, state, now);
+      this.arcadeTitle.setVisible(arcade);
+      if (arcade) { this.arcadeTitle.setText(arcadeHeadline(state)); drawArcade(graphics, state); }
+      else if (rope) drawCourt(graphics, this.ropeLayer, state, now);
       else drawTiles(graphics, state, arena, time);
       const players = Object.values(state.players);
       const slots = rope ? {
@@ -171,6 +177,16 @@ export function createGame(session, controls) {
           character = createCharacter(this, toColor(player.color), number, player.skin);
           this.characters.set(player.id, character);
         }
+        if (arcade) {
+          const position = local ? player : this.remotePosition(player, performance.now());
+          drawArcadePlayer(character, this.courtMarks, player, state, local, position, motionPreference.matches);
+          return;
+        }
+        character.label.setFontSize(10);
+        character.sprite.setVisible(player.skin === 'sprite');
+        character.shape.setVisible(player.skin !== 'sprite');
+        character.marker.setVisible(true);
+        character.shadow.setVisible(true);
         if (rope) {
           character.container.setVisible(player.participating);
           if (player.participating) drawRopePlayer(character, this.courtMarks, player, local, slots, now, controls, state, motionPreference.matches);

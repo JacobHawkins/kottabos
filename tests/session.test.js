@@ -87,7 +87,7 @@ test('a five-round session cycles the host selection and keeps waiting for a sec
 
 // Serial because the Colyseus matchmaker is process-global; the protocol clients
 // below are independent real WebSocket sessions, not room method mocks.
-test('party lifecycle and recovery over real HTTP/WebSocket connections', { timeout: 30_000 }, async (t) => {
+test('party lifecycle and recovery over real HTTP/WebSocket connections', { timeout: 45_000 }, async (t) => {
   let server = await createAppServer({ port: 0, reconnectionSeconds: 3, countdownMs: 100, voteMs: 150, log: false });
   await server.listen();
   let endpoint = `http://127.0.0.1:${server.httpServer.address().port}`;
@@ -209,7 +209,7 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
 
   await t.test('fixed-step inputs cannot move twice for duplicate sequence or unbounded commands', async () => {
     second.send('start');
-    await until(() => authoritative.state.phase === 'playing', 'countdown starts a round');
+    await until(() => authoritative.state.phase === 'playing' && authoritative.state.sessionRound === 3, 'default session reaches its third round', 10000);
     assert.equal(authoritative.state.phaseEndsAt, 0, 'playing has no global round deadline');
     const player = authoritative.state.players.get(firstId);
     const original = { x: player.x, y: player.y };
@@ -246,8 +246,8 @@ test('party lifecycle and recovery over real HTTP/WebSocket connections', { time
     first = track(await new Client(endpoint).reconnect(token));
     await until(() => first.state.phase === 'results' && second.state.phase === 'results', 'both clients agree results');
     assert.equal(first.state.players.get(firstId).alive, false);
-    assert.equal(first.state.players.get(firstId).score, 0);
-    assert.equal(second.state.players.get(secondId).score, 3);
+    assert.equal(first.state.players.get(firstId).score, 2);
+    assert.equal(second.state.players.get(secondId).score, 5);
     assert.deepEqual(Array.from(first.state.winnerIds), Array.from(second.state.winnerIds));
     const score = authoritative.state.players.get(secondId).score;
     await delay(100);

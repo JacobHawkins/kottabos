@@ -68,7 +68,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       });
       this.onMessage('replay', (client) => this.replay(client));
       this.onMessage('input', (client, input) => this.acceptInput(client, input));
-      this.onMessage('action', (client, input) => games[this.state.gameId].act?.(this.state, this.playerFor(client), input));
+      this.onMessage('action', (client, input) => games[this.state.gameId].act?.(this.state, this.playerFor(client), input, this.roundGame));
       this.onMessage('clearInputs', (client) => this.clearInputs(client.userData?.playerId));
       this.onMessage('identify', (client) => this.sendWelcome(client));
       this.onMessage('ping', (client, data) => {
@@ -219,6 +219,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
     }
 
     clearInputs(id) {
+      this.roundGame?.intent?.delete(id);
       const input = this.inputState.get(id);
       if (!input) return;
       input.queue.length = 0;
@@ -255,7 +256,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         return;
       }
       this.state.sessionRound = 0;
-      this.state.sessionLength = 1;
+      this.state.sessionLength = 3;
       this.state.sessionResult = '';
       this.state.sessionWinnerIds.clear();
       for (const p of this.state.players.values()) {
@@ -283,7 +284,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       const players = this.state.players.values();
       this.nextMap = 'classic';
       if (this.state.phase === 'lengthVote') {
-        this.state.sessionLength = Number(winningChoice(players, SESSION_CHOICES, '1'));
+        this.state.sessionLength = Number(winningChoice(players, SESSION_CHOICES, '3'));
       } else {
         this.nextMap = winningChoice(players, MAP_CHOICES, 'classic');
       }
@@ -305,6 +306,11 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         entry.roundPoints = 0;
         this.clearInputs(entry.id);
       }
+      this.state.cells.clear();
+      this.state.entities.clear();
+      this.state.gameStage = '';
+      this.state.gameEndsMs = this.state.stageEndsMs = 0;
+      this.state.cellSize = 64;
       this.roundGame = games[this.state.gameId].createRound(this.state, this.nextMap);
       this.state.phase = 'countdown';
       this.state.phaseEndsAt = Date.now() + countdownMs;
@@ -316,6 +322,7 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
       this.state.phase = 'lobby';
       this.state.phaseEndsAt = 0;
       this.state.roundElapsedMs = 0;
+      this.state.cellSize = 64;
       prepareMap(this.state);
       this.roundGame = null;
       for (const player of this.state.players.values()) {

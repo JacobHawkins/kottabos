@@ -60,7 +60,7 @@ function observe(room) {
   return room;
 }
 
-test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and once-only scores', { timeout: 45_000 }, async (t) => {
+test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and once-only scores', { timeout: 70_000 }, async (t) => {
   const server = await createAppServer({ port: 0, countdownMs: 100, reconnectionSeconds: 6, log: false });
   await server.listen();
   t.after(() => server.close());
@@ -108,7 +108,7 @@ test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and
       }
 
       guest.send('start');
-      await until(() => host.state.phase === 'playing' && guest.state.phase === 'playing', 'transferred host starts without readiness');
+      await until(() => host.state.phase === 'playing' && guest.state.phase === 'playing' && host.state.sessionRound === 3, 'transferred host starts a three-round session without readiness', 25000);
       const originalX = player.x;
       const movementStarted = performance.now();
       host.send('input', { seq: 1, x: 1, y: 0 });
@@ -132,10 +132,10 @@ test('100 ms and 250 ms added game WebSocket RTT preserve movement, recovery and
       host = track(await client.reconnect(token));
       await until(() => host.state.phase === 'results' && guest.state.phase === 'results', 'delayed clients agree on results');
       assert.equal(host.state.players.get(hostId).alive, false, 'recovery never revives elimination');
-      assert.equal(host.state.players.get(hostId).score, 0);
-      assert.equal(host.state.players.get(guestId).score, 3);
+      assert.equal(host.state.players.get(hostId).score, 2);
+      assert.equal(host.state.players.get(guestId).score, 5);
       await delay(addedRtt + 100);
-      assert.equal(authoritative.state.players.get(guestId).score, 3, 'late updates cannot award twice');
+      assert.equal(authoritative.state.players.get(guestId).score, 5, 'late updates cannot award twice');
       assert.deepEqual([...host.state.winnerIds], [...guest.state.winnerIds]);
       const leavingToken = guest.reconnectionToken;
       guest.reconnection.enabled = false;

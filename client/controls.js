@@ -3,6 +3,7 @@ import { movePlayer, normalizeInput } from '../shared/movement.js';
 import { canMoveInParty } from '../shared/party.js';
 import { arenaFor } from '../shared/arena.js';
 import { inRopeArena, NEXT_JUMP_MS } from '../shared/rope.js';
+import { inArcade } from '../shared/arcade.js';
 
 const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const TOUCH_SETTING = 'kottabos.touch-controls';
@@ -17,7 +18,7 @@ export function joystickDirection(x, y, radius) {
 
 // One controller for the page lifetime, independent of reconnecting Room objects.
 export class Controls {
-  constructor(session, { joystick, toggle, panel, hint, arena, actionButton } = {}) {
+  constructor(session, { joystick, toggle, panel, hint, arena, actionButton, secondaryButton } = {}) {
     this.session = session;
     this.keys = new Set();
     this.pending = [];
@@ -37,17 +38,32 @@ export class Controls {
     this.lastSnapshotAt = performance.now();
     this.localJump = null;
     const press = (event) => {
-      if (event.button !== 0 || !event.isPrimary) return;
-      this.ropeAction();
+      if (event.button !== 0) return;
+      this.primaryAction();
     };
-    arena?.addEventListener('pointerdown', press);
+    arena?.addEventListener('pointerdown', event => {
+      if (['rope', 'windup'].includes(this.session.state?.gameId)) press(event);
+    });
     actionButton?.addEventListener('pointerdown', press);
-    actionButton?.addEventListener('click', event => { if (event.detail === 0) this.ropeAction(); });
+    actionButton?.addEventListener('click', event => { if (event.detail === 0) this.primaryAction(); });
+    secondaryButton?.addEventListener('pointerdown', event => { if (event.button === 0) this.arcadeAction('duck'); });
+    secondaryButton?.addEventListener('click', event => { if (event.detail === 0) this.arcadeAction('duck'); });
     window.addEventListener('keydown', (event) => {
-      if (event.code === 'Space' && inRopeArena(this.session.state) && this.session.state.phase === 'playing') {
-        if (event.target !== actionButton && event.target.closest?.('input,textarea,select,button,a,[contenteditable=true]')) return;
+      const actionKey = event.code === 'Space' || event.key === 'Enter' &&
+        (event.target === actionButton || event.target === secondaryButton);
+      if (actionKey && (inRopeArena(this.session.state) || inArcade(this.session.state)) && this.session.state.phase === 'playing') {
+        if (event.target !== actionButton && event.target !== secondaryButton && event.target.closest?.('input,textarea,select,button,a,[contenteditable=true]')) return;
         event.preventDefault();
-        if (!event.repeat) this.ropeAction();
+        if (!event.repeat) {
+          if (event.target === secondaryButton) this.arcadeAction('duck');
+          else this.primaryAction();
+        }
+        return;
+      }
+      if (this.session.state?.gameId === 'runner' && this.me?.alive && ['KeyS', 'ArrowDown'].includes(event.code) &&
+          !event.target.closest?.('input,textarea,select,[contenteditable=true]')) {
+        event.preventDefault();
+        if (!event.repeat) this.arcadeAction('duck');
         return;
       }
       if (!MOVEMENT_KEYS.has(event.code) || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
@@ -132,13 +148,31 @@ export class Controls {
     this.toggle.setAttribute('aria-pressed', String(this.touchEnabled));
     this.toggle.textContent = `Touch controls: ${this.touchEnabled ? 'on' : 'off'}`;
     this.joystick.setAttribute('aria-disabled', String(!this.canMove()));
-    this.hint.textContent = this.canMove() ? 'Drag to move. Release to stop.'
+    const autoSteer = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'trails' && this.me?.alive;
+    const autoRun = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'runner' && this.me?.alive;
+    this.hint.textContent = this.canMove() ? autoSteer ? 'Drag to steer. You keep moving.' : 'Drag to move. Release to stop.'
       : this.session.connection !== 'connected' ? 'Movement pauses while reconnecting.'
+        : autoRun ? 'You run automatically. Use Jump and Duck.'
         : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
   }
 
   get me() { return this.session.state?.players[this.session.playerId]; }
   canMove() { return this.session.connection === 'connected' && canMoveInParty(this.session.state?.phase, this.me, this.session.state?.gameId); }
+
+  primaryAction() {
+    if (inRopeArena(this.session.state)) this.ropeAction();
+    else {
+      const action = { windup: 'wind', trails: 'erase', runner: this.me?.alive ? 'jump' : 'stun', bombs: 'bomb' }[this.session.state?.gameId];
+      if (action) this.arcadeAction(action);
+    }
+  }
+
+  arcadeAction(action) {
+    const state = this.session.state;
+    if (!inArcade(state) || state.phase !== 'playing' || this.session.connection !== 'connected' ||
+        !this.me?.connected || !this.me.participating) return;
+    this.session.send('action', { round: state.round, action });
+  }
 
   ropeTime() {
     const state = this.session.state;
@@ -195,10 +229,11 @@ export class Controls {
     const movable = Boolean(this.canMove());
     const phase = this.session.state?.phase || '';
     const round = this.session.state?.round ?? -1;
-    if (this.round !== round || this.phase !== phase || (this.wasMovable && !movable)) this.clear();
+    if (this.round !== round || this.phase !== phase || (this.wasMovable && !movable) || (this.wasAlive && !me?.alive)) this.clear();
     this.round = round;
     this.phase = phase;
     this.wasMovable = movable;
+    this.wasAlive = Boolean(me?.alive);
     this.renderTouch();
     if (!me) { this.clear(); return; }
     this.sequence = Math.max(this.sequence, me.lastInputSeq || 0);
@@ -212,7 +247,7 @@ export class Controls {
     // The server consumes at most one command per tick, regardless of send rate.
     this.pending = this.pending.filter((input) => input.seq > me.lastInputSeq);
     let predicted = { x: me.x, y: me.y };
-    for (const input of this.pending) predicted = movePlayer(predicted, input, STEP_MS / 1000, this.arena);
+    for (const input of inArcade(this.session.state) ? [] : this.pending) predicted = movePlayer(predicted, input, STEP_MS / 1000, this.arena);
     this.correction = this.predicted ? Math.hypot(predicted.x - this.predicted.x, predicted.y - this.predicted.y) : 0;
     this.predicted = predicted;
   }
@@ -228,13 +263,14 @@ export class Controls {
       const input = { ...this.direction(), seq: ++this.sequence };
       if (!this.session.send('input', input)) { this.clear(); break; }
       this.pending.push(input);
-      this.predicted = movePlayer(this.predicted, input, STEP_MS / 1000, this.arena);
+      if (!inArcade(this.session.state)) this.predicted = movePlayer(this.predicted, input, STEP_MS / 1000, this.arena);
     }
   }
 
   get arena() { return arenaFor(this.session.state); }
 
   position() {
+    if (inArcade(this.session.state)) return this.me;
     if (!this.predicted) return null;
     // Fractional-tick preview responds on the next animation frame, even before
     // the next 30 Hz command is sent. It never changes authoritative outcomes.

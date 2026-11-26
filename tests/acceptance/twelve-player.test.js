@@ -160,7 +160,7 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
       'all clients observe twelve connected players after recovery');
 
     host.room.send('start');
-    await until(() => host.room.state.phase === 'countdown', 'the host starts all twelve connected players');
+    await until(() => host.room.state.phase === 'countdown' && host.room.state.sessionRound === 3, 'the host starts the third default round for twelve players', 30000);
     const startingPositions = new Map([...host.room.state.players].map(([id, player]) => [id, { x: player.x, y: player.y }]));
     assert.equal(new Set([...startingPositions.values()].map(({ x, y }) => `${x},${y}`)).size, 12, 'all twelve spawns are distinct');
     assert.ok([...host.room.state.players.values()].every(({ alive, participating }) => alive && participating));
@@ -254,6 +254,6 @@ test('twelve real clients complete movement, reserved-seat recovery, shared resu
     await until(() => players.every(({ room }) => room.state.players.size === 12), 'the released twelfth seat can be filled');
     assert.equal(replacement.room.state.hostId, players[1].id, 'joining does not steal host controls');
     players[1].room.send('start');
-    await until(() => players.every(({ room }) => room.state.round === 2 && room.state.phase === 'countdown'),
+    await until(() => players.every(({ room }) => room.state.round === 4 && room.state.phase === 'countdown'),
       'the transferred host can start the next twelve-player round');
   });

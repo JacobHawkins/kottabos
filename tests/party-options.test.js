@@ -7,10 +7,11 @@ import { mapSpawns, prepareMap, SHAPES } from '../server/minigames/maps.js';
 import { winningChoice } from '../server/voting.js';
 
 test('ballots resolve empty, plurality and tied choices, including the last tied option', () => {
+  assert.deepEqual(SESSION_CHOICES, ['3', '5', '10']);
   const ballots = (...votes) => votes.map(vote => ({ vote }));
-  assert.equal(winningChoice(ballots('', '9'), SESSION_CHOICES, '1'), '1');
+  assert.equal(winningChoice(ballots('', '9'), SESSION_CHOICES, '3'), '3');
   assert.equal(winningChoice(ballots(), MAP_CHOICES, 'classic'), 'classic');
-  assert.equal(winningChoice(ballots('3', '3', '1', '5'), SESSION_CHOICES, '1'), '3');
+  assert.equal(winningChoice(ballots('3', '3', '1', '5'), SESSION_CHOICES, '3'), '3');
   for (const [draw, expected] of [[0, 'small'], [1, 'shaped']]) {
     assert.equal(winningChoice(ballots('small', 'shaped'), MAP_CHOICES, 'classic', n => {
       assert.equal(n, 2);

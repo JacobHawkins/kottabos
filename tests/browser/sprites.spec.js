@@ -102,7 +102,7 @@ test('LPC characters load, walk and stop directionally, and reset through recove
     await expectIdle(host, hostId, 'right', 25);
     await expectIdle(guest, hostId, 'right', 25);
     await host.screenshot({ path: testInfo.outputPath('sprite-round.png'), fullPage: true });
-    await expect.poll(async () => (await snapshot(host)).phase).toBe('results');
+    await expect.poll(async () => (await snapshot(host)).phase, { timeout: 25000 }).toBe('results');
 
     const result = await snapshot(host);
     const score = result.players.find(player => player.id === hostId).score;
@@ -134,7 +134,7 @@ test('LPC characters load, walk and stop directionally, and reset through recove
     }
     await guest.locator('#start-button').click();
     await expect.poll(async () => (await snapshot(guest)).phase, { intervals: [20] }).toBe('playing');
-    expect((await snapshot(guest)).round).toBe(2);
+    expect((await snapshot(guest)).round).toBe(4);
     await guest.locator('#game-container').focus();
     await guest.keyboard.down('ArrowUp');
     try {

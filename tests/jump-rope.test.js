@@ -45,7 +45,7 @@ test('three misses take a jumper out, successful jumps clear the rope, and only 
   assert.deepEqual(tied.tickTo(tied.state.ropeHitMs).pointsByPlayer, { 1: 1, 2: 1 });
 });
 
-test('actions are scoped to role, connection, round and swing, and jumps require a landing and recovery', () => {
+test('actions are scoped to role, connection, round and swing, and jumps require a landing and immediate re-jumping', () => {
   const { state, players: [p], action, tickTo } = court(2);
   action(p, 'pull');
   assert.equal(state.ropePulls, 0);
@@ -57,10 +57,10 @@ test('actions are scoped to role, connection, round and swing, and jumps require
   assert.equal(p.jumpedAtMs, -1);
   action(p, 'jump', { jumpedAtMs: 1700 });
   assert.equal(p.jumpedAtMs, 0);
-  tickTo(580); action(p, 'jump');
+  tickTo(299); action(p, 'jump');
   assert.equal(p.jumpedAtMs, 0);
-  tickTo(750); action(p, 'jump');
-  assert.equal(p.jumpedAtMs, 750);
+  tickTo(300); action(p, 'jump');
+  assert.equal(p.jumpedAtMs, 300);
 });
 
 test('ten eliminated players can compound pulls on the next swing without moving a published contact', () => {

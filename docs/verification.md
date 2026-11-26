@@ -1,5 +1,17 @@
 # Verification record
 
+## November 25, 2026 — five arcade games and quicker jumps
+
+Implemented Wind-up Rally, Neon Trails, Maze Munch, Dash & Duck and Bomb Garden, with server-owned rules and post-elimination erasers, targeting reticles and random bombs. Jump Rope now uses a 300 ms jump and 300 ms interval between starts. Length ballots offer 3, 5 and 10 rounds and default to 3. The original project brief is unchanged.
+
+Local Node 24.20.0 verification: syntax check and production build passed; all **71 focused tests** passed, including ten automatic rounds through all five new games, refreshed identity, authoritative state agreement and once-only scores. The **twelve-client acceptance** passed capacity, reserved-seat recovery, movement, shared results, replay and host transfer. Both built-server protocol/protection tests passed. Controlled network tests passed with approximately 105 ms and 252 ms measured game RTT for the two injected delays.
+
+Five new Chrome browser cases exercise real keyboard/touch actions, all new game renderers, persistent wind charge and collected score, recovery in eliminated eraser/reticle/bomb roles, and portrait/landscape control visibility. The runner case also aims at and stuns a live runner. Screenshots exposed an overlapping landscape action panel; compact action hints and responsive control placement fixed it. Toy and runner lanes now use the available board height for the current player count. Screenshots are ignored local test artifacts.
+
+The full local suites also passed **24 development browser cases** and **16 built production browser cases**. GitHub’s first complete run passed its real Chrome/Edge development suite but exposed a production lobby checkbox race: an unrelated state patch could revert a click before its server acknowledgement. The UI now retains pending host selections until acknowledgement (with a bounded timeout and reset on disconnect/phase/party changes); a new delayed-acknowledgement regression also verifies rapid selections and the nonempty selection guard. Holding Enter on a focused action button now follows the same distinct-press rule as Space. A later PR run passed all checks; the parallel branch run exposed a test timing issue where a random revenge bomb could land in lingering fire and chain before a snapshot. The browser test now waits for that fire to dissipate before observing the new bomb; immediate chain reactions remain covered by rule tests. Required CI must pass on the final revision before release.
+
+The installed local browser is Chrome. Local two-browser checks use separate Chrome processes/profiles via `TEST_GUEST_BROWSER=chrome`; this does **not** establish Edge acceptance. CI retains its real Chrome/Edge configuration. Physical iPhone Safari, new-game balance and remote-person play remain unverified for this expansion. Existing dependencies and lockfile are unchanged; no service or hosting resources were added. The existing large Phaser bundle warning remains.
+
 ## November 21, 2026 - local session and lobby checks
 
 Chrome and Edge completed the development and bundled production suites. A three-round browser session exercised a changed ballot, the 98-tile board, a random silhouette, mid-round admission and next-round participation, a shared session win, and a host kick. The browsers loaded the supplied MP3s, advanced playback, changed tracks, and recovered the guest's skin, mute and volume settings after refresh.
