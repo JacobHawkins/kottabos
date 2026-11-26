@@ -56,20 +56,27 @@ for (const [gameId, title] of Object.entries(games)) {
       await expect(page.locator('#game-container canvas')).toBeVisible();
       const action = page.locator('#rope-action');
       if (gameId === 'windup') {
+        const windReady = () => expect.poll(() => state().roundElapsedMs - me().actionAtMs).toBeGreaterThanOrEqual(80);
         await action.tap();
         await expect.poll(() => me().charge).toBe(1);
         await page.locator('#game-container').focus();
+        await windReady();
         await page.keyboard.press('Space');
         await expect.poll(() => me().charge).toBe(2);
+        await windReady();
         await page.keyboard.down('Space');
-        await page.waitForTimeout(120);
+        await expect.poll(() => me().charge).toBe(3);
+        await windReady();
+        await page.keyboard.down('Space'); // A repeat remains ignored after the server cooldown expires.
+        await page.waitForTimeout(160);
         await page.keyboard.up('Space');
-        expect(me().charge).toBeLessThanOrEqual(3);
+        expect(me().charge).toBe(3);
         await action.focus();
-        await page.waitForTimeout(100);
+        await windReady();
         const beforeEnter = me().charge;
         await page.keyboard.down('Enter');
         await expect.poll(() => me().charge).toBe(beforeEnter + 1);
+        await windReady();
         await page.keyboard.down('Enter'); // Repeated keydown on a focused native button.
         await page.waitForTimeout(160);
         await page.keyboard.up('Enter');
@@ -86,7 +93,7 @@ for (const [gameId, title] of Object.entries(games)) {
         await expect.poll(() => state().entities.filter(e => e.kind === 'bomb').length).toBe(1);
         await expect(action).toHaveText('Random bomb');
         // A revenge bomb landing in this blast chains immediately, before the next snapshot.
-        await expect.poll(() => state().entities.some(e => e.kind === 'flame')).toBe(false);
+        await expect.poll(() => !me().alive && !state().entities.some(e => e.kind === 'flame')).toBe(true);
         await action.tap();
         await expect.poll(() => state().entities.some(e => e.kind === 'bomb' && e.owner === id)).toBe(true);
       } else if (gameId === 'trails') {
