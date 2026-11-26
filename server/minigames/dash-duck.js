@@ -1,4 +1,4 @@
-import { RUN_JUMP_MS, DUCK_MS, jumpArc } from '../../shared/arcade.js';
+import { RUN_JUMP_MS, DUCK_MS, RUNNER_X, RUNNER_SPAWN_X, runnerObstacleX, jumpArc } from '../../shared/arcade.js';
 import { livingIds } from './last-standing.js';
 import { prepare, entity, removeEntity, validAction, cooldown, tick, moveCursor, survivalResult } from './arcade-common.js';
 
@@ -6,9 +6,10 @@ export function createRound(state) {
   const round = prepare(state, { columns: 20, rows: 16, name: 'Obstacle sprint', duration: 75_000 });
   round.participantIds.forEach((id, i) => {
     const lane = 40 + (i + .5) * 448 / round.participantIds.length;
-    Object.assign(state.players.get(id), { x: 110, y: lane, lane });
+    Object.assign(state.players.get(id), { x: RUNNER_X, y: lane, lane });
   });
   round.spawnAtMs = 700;
+  round.resolvedObstacles = new Set();
   return round;
 }
 export function act(state, p, input, round) {
@@ -36,12 +37,19 @@ export function updateRound(state, round, { dtMs, inputs = new Map() }) {
   }
   if (state.roundElapsedMs >= round.spawnAtMs) {
     const travel = Math.max(1100, 2500 - state.roundElapsedMs / 60);
-    entity(state, round, { kind: round.pick(2) ? 'hurdle' : 'bar', x: 620, due: state.roundElapsedMs + travel, power: travel });
+    entity(state, round, { kind: round.pick(2) ? 'hurdle' : 'bar', x: RUNNER_SPAWN_X, due: state.roundElapsedMs + travel, power: travel });
     round.spawnAtMs = state.roundElapsedMs + Math.max(780, 1600 - state.roundElapsedMs / 90);
   }
   const eliminated = [];
   for (const obstacle of [...state.entities]) {
-    obstacle.x = 110 + (obstacle.due - state.roundElapsedMs) / obstacle.power * 510;
+    const resolved = round.resolvedObstacles.has(obstacle.id);
+    obstacle.x = runnerObstacleX(obstacle, state.roundElapsedMs);
+    if (state.roundElapsedMs > obstacle.due + 240) {
+      removeEntity(state, obstacle);
+      round.resolvedObstacles.delete(obstacle.id);
+      // Large simulation steps must still resolve hazards before removing them.
+    }
+    if (resolved) continue;
     if (state.roundElapsedMs < obstacle.due) continue;
     for (const id of livingIds(state, round)) {
       const p = state.players.get(id);
@@ -49,7 +57,7 @@ export function updateRound(state, round, { dtMs, inputs = new Map() }) {
         : p.duckUntilMs > obstacle.due && p.duckUntilMs - DUCK_MS <= obstacle.due;
       if (!dodged) { p.hits++; p.dingAtMs = obstacle.due; if (p.hits >= 3) { p.alive = false; eliminated.push(id); } }
     }
-    removeEntity(state, obstacle);
+    if (state.entities.includes(obstacle)) round.resolvedObstacles.add(obstacle.id);
   }
   return survivalResult(state, round, eliminated);
 }

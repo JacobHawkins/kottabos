@@ -155,8 +155,9 @@ export function createGame(session, controls) {
       this.ropeLayer.clear();
       this.courtMarks.clear();
       const now = rope ? controls.ropeTime() : 0;
+      const arcadeNow = arcade ? controls.arcadeTime() : 0;
       this.arcadeTitle.setVisible(arcade);
-      if (arcade) { this.arcadeTitle.setText(arcadeHeadline(state)); drawArcade(graphics, state); }
+      if (arcade) { this.arcadeTitle.setText(arcadeHeadline(state, arcadeNow)); drawArcade(graphics, state, arcadeNow, session.playerId); }
       else if (rope) drawCourt(graphics, this.ropeLayer, state, now);
       else drawTiles(graphics, state, arena, time);
       const players = Object.values(state.players);
@@ -179,7 +180,8 @@ export function createGame(session, controls) {
         }
         if (arcade) {
           const position = local ? player : this.remotePosition(player, performance.now());
-          drawArcadePlayer(character, this.courtMarks, player, state, local, position, motionPreference.matches);
+          const visual = local && state.gameId === 'runner' ? controls.visualRunner(player) : player;
+          drawArcadePlayer(character, this.courtMarks, visual, state, local, position, motionPreference.matches, arcadeNow);
           return;
         }
         character.label.setFontSize(10);

@@ -136,3 +136,27 @@ test('disconnect, elimination, new round, and phase transitions clear all held m
     assert.equal(controls.pointerId, null);
   }
 });
+
+test('runner uses Up/W and Down/S, ignores Space and repeats, and retains reticle movement', t => {
+  const { controls, session, sent, window } = harness(t);
+  Object.assign(session.state, { gameId: 'runner', sessionRound: 1, roundElapsedMs: 1000 });
+  Object.assign(session.state.players.me, { id: 'me', jumpedAtMs: -1, duckUntilMs: 0, stunnedUntilMs: 0 });
+  controls.reconcile();
+  const actions = () => sent.filter(m => m.type === 'action').map(m => m.value.action);
+  for (const code of ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS']) {
+    controls.localRunner = null;
+    emit(window, 'keydown', { code });
+    emit(window, 'keydown', { code, repeat: true });
+    emit(window, 'keyup', { code });
+  }
+  assert.deepEqual(actions(), ['jump', 'jump', 'duck', 'duck']);
+  emit(window, 'keydown', { code: 'Space' });
+  emit(window, 'keyup', { code: 'Space' });
+  assert.equal(actions().length, 4);
+  session.state.players.me.alive = false;
+  controls.reconcile();
+  emit(window, 'keydown', { code: 'ArrowDown' });
+  assert.deepEqual(controls.direction(), { x: 0, y: 1 });
+  emit(window, 'keydown', { code: 'Space' });
+  assert.equal(actions().length, 4);
+});

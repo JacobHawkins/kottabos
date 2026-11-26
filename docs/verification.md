@@ -1,5 +1,15 @@
 # Verification record
 
+## November 25, 2026 — game cleanup, responsive winding and local audio
+
+Removed Neon Trails, Maze Munch and Bomb Garden from the registry, controls, renderer, schema, current instructions and tests. Four games remain. Wind-up Rally accepts rapid distinct presses with a bounded burst allowance and races toys along shared rolling tracks. Dash & Duck uses Up/W to jump and Down/S to duck; Space does nothing. Its obstacles now cross the runner's foot position at the authoritative hit deadline, with a bright approach zone, arrow symbols, and a readable next-action/act-now cue above the arena.
+
+Music now loops the selected DK-Water or DK-Racing track only in the lobby. A one-year first-party cookie preserves the song choice. The browser tests verify the cookie, refresh, independent browser settings, muted playback, no music through voting/play/results, and restoration on return to the lobby. Synthesized effects follow local actions and authoritative local dings/death, with an independent mute. Cumulative server cue counters preserve final hits across rapid round transitions; reconnect establishes a fresh audio baseline.
+
+Local Node 24.20.0 verification passed syntax/build, **72 focused rule/session/control/audio tests**, twelve-client acceptance, both production protocol/protection checks, **22 development browser cases** and **14 production browser cases**. The final hill/lane and audio-counter adjustments received a rebuilt production arcade rerun. Keyboard regressions cover six rapid Space presses counting six winds, ignored held-key repeats, all four runner keys, focused-button Space suppression, and Enter for the eliminated runner's stun. Browser instrumentation verifies actual oscillator creation for local actions, three dings and one death, while remote runners' actions remain silent. Rule tests cover the rate bound, twelve lanes, stable tracks after a departure, hazard contact geometry and once-only hits.
+
+Local browser runs use Chrome with `TEST_GUEST_BROWSER=chrome` for independent guest processes; this is not Edge evidence. CI retains actual Chrome and Edge. Screenshots were inspected for phone portrait/landscape layout and obstacle cues. Physical iPhone audio/game feel and remote-person play remain human acceptance work. The original brief and dependencies are unchanged. No hosting resource or billing change is part of this update. Required `validate` must pass before merging through the existing main release workflow.
+
 ## November 25, 2026 — five arcade games and quicker jumps
 
 Implemented Wind-up Rally, Neon Trails, Maze Munch, Dash & Duck and Bomb Garden, with server-owned rules and post-elimination erasers, targeting reticles and random bombs. Jump Rope now uses a 300 ms jump and 300 ms interval between starts. Length ballots offer 3, 5 and 10 rounds and default to 3. The original project brief is unchanged.

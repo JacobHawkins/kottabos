@@ -3,7 +3,7 @@ import { movePlayer, normalizeInput } from '../shared/movement.js';
 import { canMoveInParty } from '../shared/party.js';
 import { arenaFor } from '../shared/arena.js';
 import { inRopeArena, NEXT_JUMP_MS } from '../shared/rope.js';
-import { inArcade } from '../shared/arcade.js';
+import { inArcade, RUN_JUMP_MS, DUCK_MS, WIND_MS } from '../shared/arcade.js';
 
 const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const TOUCH_SETTING = 'kottabos.touch-controls';
@@ -18,8 +18,9 @@ export function joystickDirection(x, y, radius) {
 
 // One controller for the page lifetime, independent of reconnecting Room objects.
 export class Controls {
-  constructor(session, { joystick, toggle, panel, hint, arena, actionButton, secondaryButton } = {}) {
+  constructor(session, { joystick, toggle, panel, hint, arena, actionButton, secondaryButton, sounds } = {}) {
     this.session = session;
+    this.sounds = sounds;
     this.keys = new Set();
     this.pending = [];
     this.sequence = 0;
@@ -49,6 +50,18 @@ export class Controls {
     secondaryButton?.addEventListener('pointerdown', event => { if (event.button === 0) this.arcadeAction('duck'); });
     secondaryButton?.addEventListener('click', event => { if (event.detail === 0) this.arcadeAction('duck'); });
     window.addEventListener('keydown', (event) => {
+      const runner = inArcade(this.session.state) && this.session.state.gameId === 'runner';
+      const editing = event.target.closest?.('input,textarea,select,a,[contenteditable=true]');
+      if (runner && !editing && event.code === 'Space') { event.preventDefault(); return; }
+      if (runner && !editing && this.session.state.phase === 'playing') {
+        const action = this.me?.alive ? ({ ArrowUp: 'jump', KeyW: 'jump', ArrowDown: 'duck', KeyS: 'duck' })[event.code]
+          : event.code === 'Enter' && (event.target === arena || event.target === actionButton) ? 'stun' : null;
+        if (action) {
+          event.preventDefault();
+          if (!event.repeat) this.arcadeAction(action);
+          return;
+        }
+      }
       const actionKey = event.code === 'Space' || event.key === 'Enter' &&
         (event.target === actionButton || event.target === secondaryButton);
       if (actionKey && (inRopeArena(this.session.state) || inArcade(this.session.state)) && this.session.state.phase === 'playing') {
@@ -60,16 +73,14 @@ export class Controls {
         }
         return;
       }
-      if (this.session.state?.gameId === 'runner' && this.me?.alive && ['KeyS', 'ArrowDown'].includes(event.code) &&
-          !event.target.closest?.('input,textarea,select,[contenteditable=true]')) {
-        event.preventDefault();
-        if (!event.repeat) this.arcadeAction('duck');
-        return;
-      }
       if (!MOVEMENT_KEYS.has(event.code) || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
       if (this.canMove()) { event.preventDefault(); this.keys.add(event.code); }
     });
-    window.addEventListener('keyup', (event) => { this.keys.delete(event.code); });
+    window.addEventListener('keyup', (event) => {
+      if (inArcade(this.session.state) && this.session.state.gameId === 'runner' && event.code === 'Space' &&
+          !event.target.closest?.('input,textarea,select,a,[contenteditable=true]')) event.preventDefault();
+      this.keys.delete(event.code);
+    });
     window.addEventListener('blur', () => this.clear());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.clear(); });
     window.addEventListener('pagehide', () => this.clear());
@@ -148,9 +159,8 @@ export class Controls {
     this.toggle.setAttribute('aria-pressed', String(this.touchEnabled));
     this.toggle.textContent = `Touch controls: ${this.touchEnabled ? 'on' : 'off'}`;
     this.joystick.setAttribute('aria-disabled', String(!this.canMove()));
-    const autoSteer = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'trails' && this.me?.alive;
     const autoRun = this.session.state?.phase === 'playing' && this.session.state?.gameId === 'runner' && this.me?.alive;
-    this.hint.textContent = this.canMove() ? autoSteer ? 'Drag to steer. You keep moving.' : 'Drag to move. Release to stop.'
+    this.hint.textContent = this.canMove() ? 'Drag to move. Release to stop.'
       : this.session.connection !== 'connected' ? 'Movement pauses while reconnecting.'
         : autoRun ? 'You run automatically. Use Jump and Duck.'
         : this.session.state?.phase === 'countdown' ? 'Get ready to move.' : 'Movement is off while you spectate or wait.';
@@ -162,7 +172,7 @@ export class Controls {
   primaryAction() {
     if (inRopeArena(this.session.state)) this.ropeAction();
     else {
-      const action = { windup: 'wind', trails: 'erase', runner: this.me?.alive ? 'jump' : 'stun', bombs: 'bomb' }[this.session.state?.gameId];
+      const action = { windup: 'wind', runner: this.me?.alive ? 'jump' : 'stun' }[this.session.state?.gameId];
       if (action) this.arcadeAction(action);
     }
   }
@@ -171,7 +181,33 @@ export class Controls {
     const state = this.session.state;
     if (!inArcade(state) || state.phase !== 'playing' || this.session.connection !== 'connected' ||
         !this.me?.connected || !this.me.participating) return;
-    this.session.send('action', { round: state.round, action });
+    const now = this.arcadeTime(), me = this.visualRunner(this.me);
+    if (state.gameId === 'windup' && (!me.alive || now >= WIND_MS || state.gameStage !== 'winding')) return;
+    if (state.gameId === 'runner') {
+      if (me.alive && (me.stunnedUntilMs > now || me.duckUntilMs > now ||
+          me.jumpedAtMs >= 0 && now - me.jumpedAtMs < RUN_JUMP_MS)) return;
+      if (!me.alive && (action !== 'stun' || now - Math.max(me.actionAtMs, this.localStunAt ?? -10000) < 1800)) return;
+    }
+    if (this.session.send('action', { round: state.round, action })) {
+      this.sounds?.play(action);
+      if (state.gameId === 'runner' && me.alive) this.localRunner = {
+        action, at: now, sent: performance.now(), previousJump: this.me.jumpedAtMs, previousDuck: this.me.duckUntilMs,
+      };
+      if (action === 'stun') this.localStunAt = now;
+    }
+  }
+
+  arcadeTime() {
+    const state = this.session.state;
+    return state.roundElapsedMs + (state.phase === 'playing' && this.session.connection === 'connected'
+      ? Math.min(100, performance.now() - this.lastSnapshotAt) : 0);
+  }
+
+  visualRunner(player) {
+    const action = this.localRunner;
+    if (player?.id !== this.session.playerId || !action || performance.now() - action.sent >= 300 ||
+        player.jumpedAtMs !== action.previousJump || player.duckUntilMs !== action.previousDuck) return player;
+    return { ...player, ...(action.action === 'jump' ? { jumpedAtMs: action.at } : { duckUntilMs: action.at + DUCK_MS }) };
   }
 
   ropeTime() {
@@ -190,8 +226,9 @@ export class Controls {
     if (me.alive && lastJump >= 0 && now - lastJump < NEXT_JUMP_MS) return;
     if (!me.alive && me.pulledSwing === state.ropeSwing) return;
     const action = me.alive ? 'jump' : 'pull';
-    if (this.session.send('action', { round: state.round, swing: state.ropeSwing, action }) && me.alive) {
-      this.localJump = { at: now, sent: performance.now(), previous: me.jumpedAtMs };
+    if (this.session.send('action', { round: state.round, swing: state.ropeSwing, action })) {
+      this.sounds?.play(action);
+      if (me.alive) this.localJump = { at: now, sent: performance.now(), previous: me.jumpedAtMs };
     }
   }
 
@@ -210,6 +247,8 @@ export class Controls {
 
   clear() {
     this.localJump = null;
+    this.localRunner = null;
+    this.localStunAt = null;
     this.keys.clear();
     this.releaseTouch(false);
     this.clearQueue();
@@ -253,6 +292,8 @@ export class Controls {
   }
 
   update(deltaMs) {
+    const moving = this.canMove() && this.me?.alive && Math.hypot(...Object.values(this.direction())) > .1;
+    this.sounds?.movement(moving, performance.now());
     if (!this.canMove()) return;
     if (!this.predicted) this.reconcile();
     // Never replay a large burst after tab suspension or a slow frame.

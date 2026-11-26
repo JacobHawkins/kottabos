@@ -122,7 +122,7 @@
 }
 
 /* Arcade boards use the same responsive play area and action controls. */
-#party:is([data-game=windup],[data-game=trails],[data-game=maze],[data-game=runner],[data-game=bombs]) .stage { aspect-ratio: 5/4; }
+#party:is([data-game=windup],[data-game=runner]) .stage { aspect-ratio: 5/4; }
 #party:not([data-game=platform]) .arena-footer > span:not(#rope-hud) { display:none; }
 #party[data-game=windup] :is(#touch-toggle,#touch-controls) { display:none; }
 #party[data-game=windup] #game-container, #duck-action { touch-action:manipulation; }
@@ -141,9 +141,13 @@
   .is-playing #party:not([data-game=platform]) #touch-toggle[aria-pressed=true] { display:none; }
   .is-playing #party:not([data-game=platform]) #touch-controls { grid-column:2; grid-row:1; }
   .is-playing #party:not([data-game=platform]) #rope-controls { grid-column:1; grid-row:1; }
-  .is-playing #party[data-game=maze] #touch-controls { grid-column:1/-1; }
 }
 @media(max-height:540px) and (orientation:landscape) {
   .is-playing #party:not([data-game=platform]) #rope-hint { display:none; }
   .is-playing #party:not([data-game=platform]) #touch-toggle[aria-pressed=true] { display:none; }
 }
+
+#runner-cue { margin-top:5px; font-size:14px; font-weight:750; color:#c2ccd9; }
+#runner-cue[data-ready=true] { color:#10212c; background:#ffdfa0; border-radius:4px; padding:3px 7px; }
+#music-song { width:100%; font:inherit; padding:10px; color:#eff5ef; background:#182c36; border:1px solid #52666a; border-radius:6px; }
+#effects-mute { margin-top:8px; }

@@ -1,146 +1,114 @@
-import { PLAYER_COLORS } from '../shared/constants.js';
-import { jumpArc, WIND_MS } from '../shared/arcade.js';
+import { jumpArc, WIND_MS, windTrackY, RUNNER_X, RUNNER_CUE_MS, runnerObstacleX, runnerCue } from '../shared/arcade.js';
 
 export const ARCADE_PAD = 20;
 const color = c => Number.parseInt(c.replace('#', ''), 16);
+const runnerScale = count => count <= 6 ? 1.5 : 1;
 
-export function arcadeHeadline(state) {
-  const left = Math.max(0, Math.ceil((state.stageEndsMs - state.roundElapsedMs) / 1000));
-  return state.gameId === 'windup' ? state.gameStage === 'winding' ? `WIND YOUR TOY · ${left}s` : `LET THEM RUN! · ${left}s`
-    : state.gameId === 'runner' ? `ORANGE: JUMP   PURPLE: DUCK · ${left}s`
-      : state.gameId === 'trails' ? `KEEP MOVING · ${left}s` : state.gameId === 'maze' ? `MUNCH THE MAZE · ${left}s` : `MIND THE FUSE · ${left}s`;
+export function arcadeHeadline(state, now = state.roundElapsedMs) {
+  const left = Math.max(0, Math.ceil((state.stageEndsMs - now) / 1000));
+  if (state.phase === 'countdown') return state.gameId === 'windup' ? 'GET READY TO WIND!' : 'GET READY · ↑ / W JUMPS · ↓ / S DUCKS';
+  return state.gameId === 'windup' ? state.gameStage === 'winding' ? `WIND YOUR TOY · ${left}s` : `OVER THE HILLS! · ${left}s`
+    : `${runnerCue(state, now)} · ${left}s`;
 }
 
-export function drawArcade(g, state) {
-  const pad = ARCADE_PAD, size = state.cellSize, width = state.columns * size, height = state.rows * size;
-  g.fillStyle(state.gameId === 'trails' ? 0x081322 : 0x142b36).fillRoundedRect(pad, pad, width, height, 8);
-  if (['windup', 'runner'].includes(state.gameId)) {
-    const players = Object.values(state.players).filter(p => p.participating);
-    players.forEach(p => {
-      const y = pad + p.lane;
-      g.fillStyle(color(p.color), .07).fillRect(pad + 8, y - 28, width - 16, 35);
-      g.lineStyle(1, color(p.color), .3).lineBetween(pad + 8, y + 7, pad + width - 8, y + 7);
-      if (state.gameId === 'windup') {
-        g.fillStyle(0x091c26).fillRect(pad + 45, y - 9, width - 65, 4);
-        g.fillStyle(color(p.color), .65).fillRect(pad + 45, y - 9, Math.min(width - 65, p.charge * 4.2), 4);
-      }
-    });
+export function drawArcade(g, state, now, localId) {
+  const pad = ARCADE_PAD, width = state.columns * state.cellSize, height = state.rows * state.cellSize;
+  const players = Object.values(state.players).filter(p => p.participating);
+  g.fillStyle(0x142b36).fillRoundedRect(pad, pad, width, height, 8);
+  const next = state.entities.filter(e => e.due > now).sort((a, b) => a.due - b.due)[0];
+  const spacing = 448 / Math.max(1, state.laneCount), scale = runnerScale(state.laneCount);
+  for (const p of players) {
+    const y = pad + p.lane, paint = color(p.color), local = p.id === localId;
     if (state.gameId === 'windup') {
-      g.lineStyle(2, 0xfff3c6, .65).lineBetween(pad + 40, pad + 30, pad + 40, pad + height - 12);
-      const progress = Math.min(1, state.roundElapsedMs / WIND_MS);
-      g.fillStyle(0xa7edc6).fillRect(pad + 10, pad + height - 15, (width - 20) * progress, 4);
-    } else for (const e of state.entities) {
-      players.forEach(p => {
-        const y = pad + p.lane, x = pad + e.x;
-        if (e.kind === 'hurdle') {
-          g.fillStyle(0xf5aa57).fillTriangle(x, y, x + 15, y - 20, x + 30, y);
-          g.lineStyle(2, 0xffe4b3).lineBetween(x + 7, y - 7, x + 23, y - 7);
-        } else {
-          g.fillStyle(0xc2a2f3).fillRoundedRect(x, y - 28, 32, 15, 3);
-          g.lineStyle(2, 0xf2deff).lineBetween(x + 3, y - 19, x + 29, y - 19);
-        }
-      });
-    }
-    return;
-  }
-  state.cells.forEach((value, i) => {
-    const x = pad + i % state.columns * size, y = pad + Math.floor(i / state.columns) * size;
-    g.lineStyle(1, 0x2c4652, .3).strokeRect(x, y, size, size);
-    if (state.gameId === 'trails') {
-      if (value >= 10) g.fillStyle(color(PLAYER_COLORS[value - 10]), .75).fillRoundedRect(x + 3, y + 3, size - 6, size - 6, 3);
-    } else if (value === 1) {
-      g.fillStyle(state.gameId === 'maze' ? 0x426bba : 0x597c73).fillRoundedRect(x + 2, y + 2, size - 4, size - 4, 4);
-      g.lineStyle(1, 0x95c7d9, .6).strokeRoundedRect(x + 4, y + 4, size - 8, size - 8, 3);
-    } else if (state.gameId === 'maze') {
-      if (value === 2) g.fillStyle(0xffe5a3).fillCircle(x + size / 2, y + size / 2, 3);
-      if (value === 3) {
-        g.fillStyle(0xe5a4ff).fillCircle(x + size / 2, y + size / 2, 9);
-        g.fillStyle(0xffffff).fillCircle(x + size / 2, y + size / 2, 3);
+      const track = x => pad + windTrackY(x, p.lane, state.laneCount);
+      g.lineStyle(local ? 4 : 2, paint, local ? .85 : .45);
+      g.beginPath().moveTo(pad + 40, track(40));
+      for (let x = 44; x <= 600; x += 4) g.lineTo(pad + x, track(x));
+      g.strokePath();
+      // Start and distance markers follow the same hills as the wheels.
+      for (let x = 40; x <= 600; x += 140) g.lineStyle(2, 0xe8e7cf, .4).lineBetween(pad + x, track(x) - 4, pad + x, track(x) + 4);
+    } else {
+      g.fillStyle(paint, local ? .17 : .045).fillRect(pad + 8, y - Math.min(34 * scale, spacing - 5), width - 16, Math.min(40 * scale, spacing - 1));
+      g.lineStyle(local ? 2 : 1, local ? 0xf3f6dc : paint, local ? .8 : .4).lineBetween(pad + 8, y, pad + width - 8, y);
+      if (p.alive && next) {
+        const cueWidth = RUNNER_CUE_MS / next.power * 510;
+        const ready = next.due - now <= RUNNER_CUE_MS;
+        const cueColor = next.kind === 'hurdle' ? 0xffbd69 : 0xc5a0ff;
+        g.fillStyle(cueColor, ready ? .25 : .08).fillRect(pad + RUNNER_X, y - 30 * scale, cueWidth, 30 * scale);
+        g.lineStyle(2, cueColor, .8).lineBetween(pad + RUNNER_X + cueWidth, y - 30 * scale, pad + RUNNER_X + cueWidth, y);
       }
-    } else if (value === 2) {
-      g.fillStyle(0x9e724a).fillRect(x + 3, y + 3, size - 6, size - 6);
-      g.lineStyle(2, 0xe0b575).strokeRect(x + 5, y + 5, size - 10, size - 10);
-      g.lineBetween(x + 5, y + 5, x + size - 5, y + size - 5);
-    } else if (value >= 4) {
-      g.fillStyle(value === 4 ? 0xf7b662 : 0xa9efae).fillCircle(x + size / 2, y + size / 2, 10);
-      g.lineStyle(3, 0x17303b).lineBetween(x + 11, y + 16, x + 21, y + 16);
-      if (value === 4) g.lineBetween(x + 16, y + 11, x + 16, y + 21);
-      else g.fillStyle(0x17303b).fillCircle(x + 16, y + 16, 5);
+      // The collision line is exactly the runner's feet, not an obstacle's leading edge.
+      g.lineStyle(2, 0xffffff, .5).lineBetween(pad + RUNNER_X, y - 33 * scale, pad + RUNNER_X, y + 4);
+      for (const e of state.entities) {
+        if (!p.alive) continue;
+        const x = pad + runnerObstacleX(e, now);
+        const alpha = now > e.due ? .35 : 1;
+        if (e.kind === 'hurdle') {
+          g.fillStyle(0xf5aa57, alpha).fillRoundedRect(x - 8 * scale, y - 11 * scale, 16 * scale, 11 * scale, 2);
+          g.lineStyle(2, 0xfff0c6, alpha).lineBetween(x - 8 * scale, y - 11 * scale, x + 8 * scale, y - 11 * scale);
+          // Up arrow makes the action legible without relying on color.
+          g.lineBetween(x, y - 17 * scale, x, y - 26 * scale).lineBetween(x, y - 26 * scale, x - 4 * scale, y - 22 * scale).lineBetween(x, y - 26 * scale, x + 4 * scale, y - 22 * scale);
+        } else {
+          g.fillStyle(0xba94ef, alpha).fillRoundedRect(x - 13 * scale, y - 31 * scale, 26 * scale, 17 * scale, 3);
+          g.lineStyle(2, 0xf6e7ff, alpha).lineBetween(x, y - 27 * scale, x, y - 19 * scale)
+            .lineBetween(x, y - 19 * scale, x - 4 * scale, y - 23 * scale).lineBetween(x, y - 19 * scale, x + 4 * scale, y - 23 * scale);
+          // A visible gap under the overhead bar shows where a duck fits.
+          g.lineStyle(1, 0xd9c7f8, .4 * alpha).lineBetween(x, y - 12 * scale, x, y);
+        }
+      }
     }
-  });
-  for (const e of state.entities) {
-    const x = pad + e.x, y = pad + e.y;
-    if (e.kind === 'ghost') {
-      if (e.due > state.roundElapsedMs) continue;
-      g.fillStyle(0xee87b8).fillRoundedRect(x - 11, y - 12, 22, 23, 9);
-      g.fillStyle(0xffffff).fillCircle(x - 4, y - 3, 4).fillCircle(x + 4, y - 3, 4);
-      g.fillStyle(0x142332).fillCircle(x - 4, y - 3, 2).fillCircle(x + 4, y - 3, 2);
-    } else if (e.kind === 'bomb') {
-      const pulse = Math.sin(state.roundElapsedMs / 65) > 0;
-      g.fillStyle(0x080f21).fillCircle(x, y, 12);
-      g.lineStyle(2, pulse ? 0xffe0a0 : 0xf26f72).strokeCircle(x, y, 12);
-      g.lineStyle(3, 0xffd96e).lineBetween(x + 3, y - 11, x + 7, y - 16);
-      const remaining = Math.max(0, Math.min(1, (e.due - state.roundElapsedMs) / 2200));
-      g.fillStyle(0xfce0ad).fillRect(x - 10, y + 15, remaining * 20, 3);
-    } else if (e.kind === 'flame') {
-      g.fillStyle(0xff8c4b, .9).fillRoundedRect(x - 15, y - 15, 30, 30, 5);
-      g.fillStyle(0xffed9a).fillCircle(x, y, 8);
-    }
+  }
+  if (state.gameId === 'windup' && state.gameStage === 'winding') {
+    g.fillStyle(0xa7edc6).fillRect(pad + 10, pad + height - 15, (width - 20) * Math.min(1, now / WIND_MS), 4);
   }
 }
 
-export function drawArcadePlayer(character, g, p, state, local, position, reducedMotion) {
-  const id = state.gameId, now = state.roundElapsedMs, pad = ARCADE_PAD;
-  const cursor = !p.alive && ['trails', 'runner'].includes(id);
-  const visible = p.participating && (p.alive || cursor);
-  character.container.setVisible(visible);
-  if (!visible) return;
-  const x = pad + position.x, y = pad + position.y;
+export function drawArcadePlayer(character, g, p, state, local, position, reducedMotion, now = state.roundElapsedMs) {
+  const toy = state.gameId === 'windup', cursor = !p.alive && !toy;
+  character.container.setVisible(p.participating);
+  if (!p.participating) return;
+  const count = state.laneCount, scale = toy ? 1 : runnerScale(count);
+  const x = ARCADE_PAD + position.x, y = ARCADE_PAD + (toy ? windTrackY(position.x, p.lane, count) : position.y);
   const paint = color(p.color);
-  character.container.setRotation(0).setPosition(x, y).setDepth(10 + y).setAlpha(p.connected ? 1 : .5).setScale(.68);
-  character.ring.setVisible(local);
-  character.sprite.setVisible(p.skin === 'sprite' && !cursor && !['windup', 'trails'].includes(id));
-  character.shape.setVisible(p.skin !== 'sprite' && !cursor && !['windup', 'trails'].includes(id));
-  character.marker.setVisible(!cursor);
-  character.shadow.setVisible(!cursor);
-  character.label.setVisible(local || id === 'windup');
-  const metric = id === 'windup' ? state.gameStage === 'winding' ? `${p.charge} winds` : `${p.distance}cm`
-    : id === 'maze' ? `${p.collected} · ${p.hits}/3` : id === 'runner' ? `${p.hits}/3` : '';
-  character.label.setFontSize(18);
-  character.label.setText(`${local ? 'YOU' : character.number}${metric ? ' · ' + metric : ''}`);
-  character.label.setPosition(0, -42);
+  character.container.setRotation(0).setPosition(x, y).setDepth(10 + y).setAlpha(p.connected ? 1 : .5).setScale(.68 * scale);
+  character.ring.setVisible(local && !toy && !cursor);
+  character.sprite.setVisible(p.skin === 'sprite' && !cursor && !toy);
+  character.shape.setVisible(p.skin !== 'sprite' && !cursor && !toy);
+  character.marker.setVisible(!cursor && !toy);
+  character.shadow.setVisible(!cursor && !toy);
+  character.label.setVisible(local || toy);
+  const metric = toy ? state.gameStage === 'winding' ? `${p.charge} winds` : `${p.distance} cm` : `${p.hits}/3`;
+  character.label.setFontSize(18).setText(`${local ? 'YOU' : character.number} · ${metric}`).setPosition(toy && state.gameStage === 'winding' ? 45 : 0, -45);
   if (cursor) {
-    const radius = id === 'trails' ? state.cellSize * 2 : 28;
-    g.lineStyle(2, paint, .9).strokeCircle(x, y, radius);
-    g.lineBetween(x - radius - 6, y, x + radius + 6, y).lineBetween(x, y - radius - 6, x, y + radius + 6);
-    if (now - p.actionAtMs < 250) g.fillStyle(paint, .2).fillCircle(x, y, radius);
-    character.label.setText(local ? id === 'trails' ? 'YOUR ERASER' : 'YOUR RETICLE' : character.number);
+    g.lineStyle(2, paint, .9).strokeCircle(x, y, 28);
+    g.lineBetween(x - 34, y, x + 34, y).lineBetween(x, y - 34, x, y + 34);
+    if (now - p.actionAtMs < 250) g.fillStyle(paint, .2).fillCircle(x, y, 28);
+    character.label.setText(local ? 'YOUR RETICLE' : character.number);
     return;
   }
-  if (id === 'windup') {
-    g.fillStyle(paint).fillRoundedRect(x - 14, y - 20, 28, 17, 5);
-    g.fillStyle(0x0a1a22).fillCircle(x - 8, y - 2, 5).fillCircle(x + 8, y - 2, 5);
-    g.lineStyle(2, 0xffe6aa).lineBetween(x, y - 20, x, y - 29);
-    const turn = p.charge % 2 ? 6 : 2;
-    g.strokeEllipse(x, y - 29, turn * 2, 5);
-    character.label.setPosition(38, -17);
-  } else if (id === 'trails') {
-    g.fillStyle(paint).fillCircle(x, y, 9);
-    const angles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-    g.lineStyle(3, 0xffffff).lineBetween(x, y, x + Math.cos(angles[p.facing]) * 12, y + Math.sin(angles[p.facing]) * 12);
-  } else {
-    const moving = id === 'runner' || character.previous && Math.hypot(position.x - character.previous.x, position.y - character.previous.y) > .1;
-    const facing = id === 'runner' ? 'right' : ['right', 'down', 'left', 'up'][p.facing];
-    if (reducedMotion) character.sprite.stop().setFrame(({ up: 22, left: 23, down: 24, right: 25 }[facing]) * 13);
-    else character.sprite.play(`party-${moving ? 'walk' : 'idle'}-${facing}`, true);
-    if (p.immuneUntilMs > now && Math.floor(now / 90) % 2) character.container.setAlpha(.45);
-    if (id === 'runner') {
-      const jump = jumpArc(p.jumpedAtMs, now) * 25;
-      character.container.setY(y - jump);
-      if (p.duckUntilMs > now) character.container.setScale(.68, .36);
-      if (p.stunnedUntilMs > now) g.lineStyle(3, 0xfff099).strokeCircle(x, y - 20, 17);
+  if (toy) {
+    const slope = (windTrackY(position.x + 1, p.lane, count) - windTrackY(position.x - 1, p.lane, count)) / 2;
+    const angle = Math.atan(slope), cos = Math.cos(angle), sin = Math.sin(angle);
+    const point = (a, b) => ({ x: x + a * cos - b * sin, y: y + a * sin + b * cos });
+    const corners = [[-14,-20],[14,-20],[14,-5],[-14,-5]].map(([a,b]) => point(a,b));
+    g.fillStyle(paint).fillPoints(corners, true);
+    if (local) g.lineStyle(2, 0xffffff).strokePoints(corners, true);
+    for (const offset of [-8, 8]) {
+      const wheel = point(offset, -3);
+      g.fillStyle(0x091922).fillCircle(wheel.x, wheel.y, 5);
+      g.fillStyle(0xaac5ce).fillCircle(wheel.x, wheel.y, 2);
     }
-    if (id === 'maze' && p.powerUntilMs > now) g.lineStyle(2, 0xe3a5ff).strokeCircle(x, y, 15);
+    const key = point(0, -26), base = point(0, -19);
+    g.lineStyle(2, 0xffe6aa).lineBetween(base.x, base.y, key.x, key.y);
+    g.strokeEllipse(key.x, key.y, p.charge % 2 ? 12 : 5, 5);
+  } else {
+    if (reducedMotion) character.sprite.stop().setFrame(25 * 13);
+    else character.sprite.play('party-walk-right', true);
+    character.container.setY(y - jumpArc(p.jumpedAtMs, now) * 25 * scale);
+    if (p.duckUntilMs > now) character.container.setScale(.68 * scale, .30 * scale);
+    if (p.stunnedUntilMs > now) g.lineStyle(3, 0xfff099).strokeCircle(x, y - 20, 17);
+    if (p.dingAtMs >= 0 && now - p.dingAtMs >= 0 && now - p.dingAtMs < 300) {
+      g.lineStyle(3, 0xff775e, 1 - (now - p.dingAtMs) / 300).strokeCircle(x, y - 12, 21);
+    }
   }
-  character.previous = { x: position.x, y: position.y };
 }

@@ -35,6 +35,10 @@ test('three-round session carries a late joiner, votes, skins and local music pr
     await expect.poll(() => audio(host).evaluate(el => el.currentTime)).toBeGreaterThan(0);
     await expect(audio(host)).toHaveAttribute('src', /DK-Water/);
     await guest.locator('#music-button').click();
+    await guest.locator('#music-song').selectOption('racing');
+    await expect(audio(guest)).toHaveAttribute('src', /DK-Racing/);
+    expect(await audio(guest).evaluate(el => el.loop)).toBe(true);
+    expect((await guest.context().cookies()).find(c => c.name === 'kottabos.song')?.value).toBe('racing');
     await guest.locator('#music-volume').fill('60');
     await guest.locator('#music-mute').click();
     await guest.reload();
@@ -42,18 +46,20 @@ test('three-round session carries a late joiner, votes, skins and local music pr
     await expect(guest.locator('#skin-choice')).toHaveValue('triangle');
     await expect(guest.locator('#music-mute')).toHaveAttribute('aria-pressed', 'true');
     await expect(guest.locator('#music-volume')).toHaveValue('60');
+    await expect(guest.locator('#music-song')).toHaveValue('racing');
     await expect(host.locator('#music-mute')).toHaveAttribute('aria-pressed', 'false');
 
     // Prepare the invitation before the short first round.
     await late.goto(invite);
     await late.locator('#nickname').fill('Iris');
     await host.locator('#start-button').click();
+    await expect.poll(() => audio(host).evaluate(el => el.paused && !el.hasAttribute('src'))).toBe(true);
     await host.locator('[data-choice="5"]').click();
     await host.locator('[data-choice="3"]').click();
     await expect(guest.locator('[data-choice="3"]')).toContainText('(1)');
     await expect(guest.locator('[data-choice="5"]')).toContainText('(0)');
     await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'playing');
-    await expect(audio(host)).toHaveAttribute('src', /DK-Racing/);
+    await expect.poll(() => audio(host).evaluate(el => el.paused && !el.hasAttribute('src'))).toBe(true);
     await late.locator('#join-party').click();
     await expect(late.locator('.local-player')).toContainText('SPECTATING');
     await expect(late.locator('#vote-title')).toHaveText('Pick the next map');
@@ -66,13 +72,18 @@ test('three-round session carries a late joiner, votes, skins and local music pr
     await expect(host.locator('#round-label')).toHaveText(/Round 3 of 3 · (Diamond|Cross|Ring|Hourglass|Steps)/);
     await expect(late.locator('#session-result')).toHaveText(/Daphne & Apollo tie for the session with 3 points/);
     await expect(host.locator('#session-result')).toHaveText(/Daphne & Apollo tie for the session with 3 points/);
-    await expect(audio(host)).toHaveAttribute('src', /DK-Water/);
+    await expect.poll(() => audio(host).evaluate(el => el.paused && !el.hasAttribute('src'))).toBe(true);
     await host.locator('#manage-party').click();
     await host.getByRole('button', { name: 'Kick Iris' }).click();
     await expect(late.locator('#notice')).toContainText('host removed you');
     await expect(host.locator('#player-count')).toHaveText('2 / 12');
     await late.reload();
     await expect(late.locator('#home')).toBeVisible();
+    await host.locator('#manage-party').click();
+    await host.locator('#replay-button').click();
+    await expect(host.locator('#phase-label')).toHaveAttribute('data-phase', 'lobby');
+    await expect(audio(host)).toHaveAttribute('src', /DK-Water/);
+    await expect(audio(guest)).toHaveAttribute('src', /DK-Racing/);
     expect(errors).toEqual([]);
   } finally {
     await browser.close();

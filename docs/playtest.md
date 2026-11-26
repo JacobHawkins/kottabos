@@ -46,11 +46,9 @@ Two-minute reservations begin when the server detects disconnection. Background 
 Try 3-, 5- and 10-round sessions and select each new game in the lobby. Record the player count, devices/browsers and whether participants used separate networks.
 
 - Jump Rope: compare repeated taps with the previous jump. The new 300 ms jump can restart immediately on landing. Check whether the shorter safe window still feels fair.
-- Wind-up Rally: use touch and Space; compare fast and slow tapping, watch the toys travel different distances, and confirm the farthest gets +1. Refresh during winding and during the race.
-- Neon Trails: steer early, test your own and other players' trails and an edge. Once eliminated, move the eraser and clear a path for a survivor. Check how twelve starting lanes feel.
-- Maze Munch: compete for dots, use a power star to catch a ghost, and take three ghost hits. Check that the highest collected score wins even if that player was eliminated.
-- Dash & Duck: jump orange hurdles and duck purple bars. After three dings, aim at another runner and stun them. Check that the shot cooldown and target protection feel fair.
-- Bomb Garden: escape your own fuse, break crates, collect both upgrades, and try a chain reaction. Once eliminated, repeatedly request random bombs and check the visible fuse gives survivors a chance to escape.
+- Wind-up Rally: use touch and Space; compare rapid distinct taps with the displayed count, watch toys follow the hills and travel different distances, and confirm the farthest gets +1. Refresh during winding and during the race.
+- Dash & Duck: use Up/W to jump orange hurdles and Down/S to duck purple bars. Space must do nothing, including when a button has focus. Use the highlighted approach zone and watch the obstacle center cross your feet. After three dings, aim at another runner and stun them. Check that the shot cooldown and target protection feel fair.
+- Audio: select either lobby song, refresh and reopen in the same browser, then start a session. Confirm the song loops only in the lobby and stays silent through results. Check that only your inputs, dings and death make effects, and that effects mute is independent of music.
 - Refresh or briefly disconnect in each game, including every post-elimination role. Identity, party/session points and elimination must persist. Try joystick movement with a second finger on the action button, then rotate the phone.
 
 Current automated phone checks use Chrome touch/viewport emulation. New-game balance, physical iPhone Safari, real network input latency and a family playtest remain human acceptance work.

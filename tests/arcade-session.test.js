@@ -14,7 +14,7 @@ function observe(room) {
   return room;
 }
 
-test('ten rounds rotate all five games, synchronize state, recover identity and award each round once', async t => {
+test('ten rounds rotate both arcade games, synchronize state, recover identity and award each round once', async t => {
   const server = await createAppServer({ port: 0, countdownMs: 100, voteMs: 150, log: false });
   await server.listen();
   const client = new Client(`http://127.0.0.1:${server.httpServer.address().port}`);
@@ -24,7 +24,7 @@ test('ten rounds rotate all five games, synchronize state, recover identity and 
   let guest = observe(await client.joinById(host.roomId, { name: 'Guest' })); members.push(guest);
   const room = server.rooms.get(host.roomId), state = room.state;
   const guestId = [...state.players.values()].find(p => p.name === 'Guest').id;
-  const selection = ['windup', 'trails', 'maze', 'runner', 'bombs'];
+  const selection = ['windup', 'runner'];
   host.send('games', selection); host.send('start');
   await until(() => host.state.phase === 'lengthVote');
   host.send('vote', { phase: 'lengthVote', round: 0, choice: '1' });
@@ -33,10 +33,10 @@ test('ten rounds rotate all five games, synchronize state, recover identity and 
   let totals = new Map([...state.players.keys()].map(id => [id, 0]));
   for (let n = 1; n <= 10; n++) {
     await until(() => state.phase === 'playing' && state.sessionRound === n);
-    assert.equal(state.gameId, selection[(n - 1) % 5]);
+    assert.equal(state.gameId, selection[(n - 1) % selection.length]);
     assert.equal(state.sessionLength, 10);
     await until(() => guest.state.round === n && guest.state.phase === 'playing');
-    assert.equal(guest.state.cells.length, state.cells.length);
+    assert.equal(guest.state.columns, state.columns);
     assert.equal(guest.state.players.get(guestId).hits, 0);
     if (n === 1) {
       host.send('action', { round: n, action: 'wind' });
@@ -52,8 +52,14 @@ test('ten rounds rotate all five games, synchronize state, recover identity and 
     }
     // Advance the real fixed-step simulation without waiting 60–75 wall seconds.
     // Outcomes, hazards, phase transitions and awards still use production code.
+    const dings = state.players.get(guestId).totalDings;
+    const eliminations = state.players.get(guestId).totalEliminations;
     for (let ticks = 0; ticks < 2500 && state.phase === 'playing'; ticks++) room.step();
     assert.notEqual(state.phase, 'playing');
+    if (state.gameId === 'runner') {
+      assert.equal(state.players.get(guestId).totalDings, dings + 3);
+      assert.equal(state.players.get(guestId).totalEliminations, eliminations + 1);
+    }
     for (const p of state.players.values()) {
       totals.set(p.id, totals.get(p.id) + p.roundPoints);
       assert.equal(p.score, totals.get(p.id)); assert.equal(p.sessionPoints, p.score);
