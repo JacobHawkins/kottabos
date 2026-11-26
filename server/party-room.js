@@ -306,7 +306,6 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         entry.roundPoints = 0;
         this.clearInputs(entry.id);
       }
-      this.state.cells.clear();
       this.state.entities.clear();
       this.state.gameStage = '';
       this.state.gameEndsMs = this.state.stageEndsMs = 0;
@@ -376,7 +375,14 @@ export function createPartyRoomClass({ rooms, instanceId, reconnectionSeconds, c
         }
         return;
       }
+      const dingField = this.state.gameId === 'rope' ? 'ropeDings' : 'hits';
+      const before = [...this.state.players.values()].map(p => [p, p.alive, p[dingField]]);
       const result = games[this.state.gameId].updateRound(this.state, this.roundGame, { dtMs: STEP_MS, inputs });
+      // Cumulative cues survive a round transition that happens between state patches.
+      for (const [p, alive, dings] of before) {
+        p.totalDings += Math.max(0, p[dingField] - dings);
+        if (alive && !p.alive) p.totalEliminations++;
+      }
       if (!result || this.awardedRound === this.state.round) return;
       this.awardedRound = this.state.round;
       this.state.phase = 'results';

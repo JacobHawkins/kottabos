@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { PartyState, PlayerState } from '../server/state.js';
 import { games } from '../server/minigames/index.js';
 import { PLAYER_COLORS, MAX_PLAYERS } from '../shared/constants.js';
-import { WIND_MS, RELEASE_MS, RUN_JUMP_MS } from '../shared/arcade.js';
-import { center, cell, entity } from '../server/minigames/arcade-common.js';
+import { WIND_MS, RELEASE_MS, RUN_JUMP_MS, WIND_BURST, WIND_PER_SECOND, windTrackY, runnerObstacleX, RUNNER_X } from '../shared/arcade.js';
+import { entity } from '../server/minigames/arcade-common.js';
 
 function setup(id, count = 3) {
   const state = new PartyState({ gameId: id, phase: 'playing', round: 5, sessionRound: 1 });
@@ -16,19 +16,19 @@ function setup(id, count = 3) {
   return { state, round, players, step, action };
 }
 
-for (const id of ['windup', 'trails', 'maze', 'runner', 'bombs']) {
+for (const id of ['windup', 'runner']) {
   test(`${id}: twelve distinct participants, late joins, action roles and bounded ending`, () => {
     const { state, round, players, step, action } = setup(id, MAX_PLAYERS);
     assert.equal(new Set(players.map(p => `${p.x}:${p.y}`)).size, MAX_PLAYERS);
     const late = new PlayerState({ id: 'late' }); state.players.set(late.id, late);
     for (const p of [late, players[0]]) {
       const before = JSON.stringify(p.toJSON());
-      for (const name of ['wind', 'bomb', 'erase', 'jump', 'duck', 'stun']) action(p, name, { round: -1 });
+      for (const name of ['wind', 'jump', 'duck', 'stun']) action(p, name, { round: -1 });
       assert.equal(JSON.stringify(p.toJSON()), before);
     }
     players[0].connected = false;
     const before = JSON.stringify(players[0].toJSON());
-    for (const name of ['wind', 'bomb', 'erase', 'jump', 'duck', 'stun']) action(players[0], name);
+    for (const name of ['wind', 'jump', 'duck', 'stun']) action(players[0], name);
     assert.equal(JSON.stringify(players[0].toJSON()), before);
     let outcome;
     for (let i = 0; i < 2400 && !outcome; i++) outcome = step();
@@ -43,64 +43,17 @@ for (const id of ['windup', 'trails', 'maze', 'runner', 'bombs']) {
 test('wind-up counts distinct taps, freezes at the deadline, releases every toy and awards farthest +1', () => {
   const { state, players: [a, b, c], step, action } = setup('windup');
   action(a, 'wind'); action(a, 'wind'); action(a, 'wind', { charge: 9999 });
-  assert.equal(a.charge, 1);
+  assert.equal(a.charge, 3);
   step(80); action(a, 'wind'); action(b, 'wind');
-  assert.equal(a.charge, 2);
+  assert.equal(a.charge, 4);
   a.connected = false;
   step(WIND_MS - 80); action(b, 'wind');
   assert.equal(state.gameStage, 'racing'); assert.equal(b.charge, 1);
   step(RELEASE_MS / 2);
   assert.ok(a.distance > b.distance && b.distance > c.distance);
   const outcome = step(RELEASE_MS / 2);
-  assert.equal(a.distance, 20); assert.equal(b.distance, 10);
+  assert.equal(a.distance, 40); assert.equal(b.distance, 10);
   assert.deepEqual(outcome.pointsByPlayer, { [a.id]: 1 });
-});
-
-test('trails resolve head-on, reverse, old trails and edge collisions; only eliminated participants erase', () => {
-  const { state, round, players: [a,b,c], step, action } = setup('trails');
-  for (let i = 0; i < state.cells.length; i++) state.cells[i] = 0;
-  Object.assign(a, center(state, 100), { facing: 0 });
-  Object.assign(b, center(state, 102), { facing: 2 });
-  Object.assign(c, center(state, 200), { facing: 0 });
-  state.cells[101] = 10;
-  action(a, 'erase'); assert.equal(state.cells[101], 10);
-  state.cells[101] = 0;
-  const result = step(180);
-  assert.equal(a.alive, false); assert.equal(b.alive, false); assert.equal(c.alive, true);
-  assert.deepEqual(result.winnerIds, [c.id]);
-  // A live game with two survivors lets an eliminated participant keep playing.
-  round.outcome = null; b.alive = true;
-  state.cells[cell(state, a)] = 11;
-  action(a, 'erase'); assert.equal(state.cells[cell(state, a)], 0);
-  state.cells[cell(state, a)] = 11;
-  action(a, 'erase'); assert.equal(state.cells[cell(state, a)], 11, 'erase cooldown bounds spam');
-  Object.assign(b, center(state, 26), { facing: 0 });
-  step(180, new Map([[b.id, { x: -1, y: 0 }]]));
-  assert.equal(b.alive, false, 'cannot reverse out of an edge collision');
-});
-
-test('maze walls block movement, shared pickups are fair, power eats ghosts, and disconnects remain vulnerable', () => {
-  const { state, round, players: [a,b,c], step } = setup('maze');
-  state.entities.clear();
-  Object.assign(a, center(state, 20)); Object.assign(b, center(state, 20));
-  state.cells[20] = 3;
-  step(130, new Map([[a.id, { x: -1, y: 0 }]]));
-  assert.equal(cell(state, a), 20, 'boundary wall blocks input');
-  assert.equal(a.collected, 5); assert.equal(b.collected, 5);
-  entity(state, round, { kind: 'ghost', ...center(state, 20), due: 0 });
-  step(1);
-  assert.equal(a.collected, 15); assert.equal(b.collected, 15);
-  assert.ok(state.entities[0].due > state.roundElapsedMs);
-  state.entities.clear();
-  c.connected = false; c.powerUntilMs = 0;
-  round.ghostMoveMs = Infinity;
-  entity(state, round, { kind: 'ghost', x: c.x, y: c.y });
-  step(1); assert.equal(c.hits, 1);
-  step(100); assert.equal(c.hits, 1, 'hit grace prevents one overlap consuming every life');
-  step(1600); step(1600);
-  assert.equal(c.alive, false); assert.equal(c.hits, 3);
-  c.connected = true; step(1);
-  assert.equal(c.alive, false, 'reconnection cannot revive a player');
 });
 
 test('runner jump and duck clear the matching hazards; three dings unlock a bounded aimed stun', () => {
@@ -126,38 +79,67 @@ test('runner jump and duck clear the matching hazards; three dings unlock a boun
   step(400); action(a, 'jump'); assert.notEqual(a.jumpedAtMs, jumped);
 });
 
-test('bombs enforce capacity and walls, chain together, reveal powerups, and allow bounded random revenge', () => {
-  const { state, round, players: [a,b,c], step, action } = setup('bombs');
-  for (let i = 0; i < state.cells.length; i++) state.cells[i] = 0; state.entities.clear(); round.pick = () => 0;
-  Object.assign(a, center(state, 100)); Object.assign(b, center(state, 102)); Object.assign(c, center(state, 200));
-  action(a, 'bomb'); action(a, 'bomb'); assert.equal(state.entities.length, 1);
-  action(b, 'bomb'); state.entities[1].due = 9000;
-  state.cells[99] = 1; state.cells[101] = 2;
-  Object.assign(a, center(state, 150));
-  step(1800);
-  assert.equal(state.cells[101], 4, 'crate reveals range powerup');
-  assert.equal(state.entities.filter(e => e.kind === 'bomb').length, 1, 'crate stops a blast');
-  assert.equal(state.entities.some(e => e.kind === 'flame' && cell(state, e) === 99), false);
-  step(500);
-  Object.assign(a, center(state, 101)); step(34); assert.equal(a.power, 3);
-  Object.assign(a, center(state, 104)); action(a, 'bomb');
-  Object.assign(a, center(state, 180));
-  step(1800);
-  assert.equal(state.entities.some(e => e.kind === 'bomb'), false, 'adjacent bombs chain immediately');
-  assert.equal(b.alive, false);
-  action(b, 'bomb'); action(b, 'bomb');
-  assert.equal(state.entities.filter(e => e.kind === 'bomb').length, 1);
-  assert.equal(state.entities.find(e => e.kind === 'bomb').due, state.roundElapsedMs + 2200);
-  step(1000); action(b, 'bomb'); assert.equal(state.entities.filter(e => e.kind === 'bomb').length, 2);
+test('wind-up accepts rapid distinct taps and network bursts, but bounds sustained flooding', () => {
+  const { state, players: [a], step, action } = setup('windup');
+  for (let i = 0; i < WIND_BURST + 1000; i++) action(a, 'wind');
+  assert.equal(a.charge, WIND_BURST);
+  step(100); action(a, 'wind'); action(a, 'wind'); action(a, 'wind'); action(a, 'wind');
+  assert.equal(a.charge, WIND_BURST + 3);
+  for (let ms = 100; ms < WIND_MS; ms += 50) {
+    step(50);
+    for (let i = 0; i < 100; i++) action(a, 'wind');
+  }
+  assert.ok(a.charge <= WIND_BURST + WIND_MS / 1000 * WIND_PER_SECOND);
+  const finalCharge = a.charge;
+  action(a, 'wind'); assert.equal(a.charge, finalCharge);
+  step(RELEASE_MS);
+  assert.ok(a.x <= 600);
+  assert.equal(a.y, windTrackY(a.x, a.lane, 3));
+  assert.equal(state.gameStage, 'racing');
 });
 
-test('all bomb garden twelve-player spawns have a two-step escape and crates remain to clear', () => {
-  for (let sample = 0; sample < 20; sample++) {
-    const { state, players } = setup('bombs', MAX_PLAYERS);
-    assert.ok(state.cells.some(v => v === 2));
-    for (const p of players) {
-      assert.equal(state.cells[cell(state, p)], 0);
-      assert.ok([1,-1,state.columns,-state.columns].some(d => state.cells[cell(state,p)+d] === 0 && state.cells[cell(state,p)+2*d] === 0));
-    }
+test('toy hills rise and fall while staying in separate lanes for twelve players', () => {
+  const { players, step, action } = setup('windup', 12);
+  for (const p of players) for (let i = 0; i < 8; i++) action(p, 'wind');
+  step(WIND_MS + RELEASE_MS / 3);
+  for (const p of players) {
+    assert.equal(p.y, windTrackY(p.x, p.lane, 12));
+    assert.ok(Math.abs(p.y - p.lane) <= 448 / 12 / 4);
   }
+  assert.ok(windTrackY(80, 200, 2) > 200);
+  assert.ok(windTrackY(180, 200, 2) < 200);
+});
+
+test('runner obstacles cross the feet at contact, remain visible afterward, and ding only once', () => {
+  const { state, round, players: [a], step } = setup('runner');
+  round.spawnAtMs = Infinity;
+  const e = entity(state, round, { kind: 'hurdle', due: 1000, power: 2000 });
+  assert.ok(runnerObstacleX(e, 900) > RUNNER_X);
+  assert.equal(runnerObstacleX(e, 1000), a.x);
+  assert.ok(runnerObstacleX(e, 1100) < RUNNER_X);
+  step(1000);
+  assert.equal(a.hits, 1);
+  assert.ok(state.entities.includes(e));
+  step(100); assert.equal(a.hits, 1);
+  step(200); assert.equal(a.hits, 1);
+  assert.equal(state.entities.length, 0);
+});
+
+test('removed game ids cannot be selected or instantiated', async () => {
+  const { MINIGAMES } = await import('../shared/party.js');
+  assert.deepEqual(Object.keys(games), ['platform', 'rope', 'windup', 'runner']);
+  assert.deepEqual(Object.keys(MINIGAMES), Object.keys(games));
+});
+
+test('departing racers do not change the distance scale or hills under remaining toys', () => {
+  const { state, players: [a, b], step, action } = setup('windup');
+  for (let n = 0; n < 8; n++) action(a, 'wind');
+  action(b, 'wind');
+  step(WIND_MS + 1000);
+  const x = b.x, y = b.y;
+  state.players.delete(a.id);
+  step(0);
+  assert.equal(b.x, x);
+  assert.equal(b.y, y);
+  assert.equal(state.laneCount, 3);
 });

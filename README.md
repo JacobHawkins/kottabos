@@ -1,6 +1,6 @@
 # Kottabos
 
-A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of **3, 5 or 10 rounds** from seven minigames. The same party keeps its scores between rounds.
+A small browser party game for **two to twelve people**. Create a private party, share its code, and vote on a session of **3, 5 or 10 rounds** from four minigames. The same party keeps its scores between rounds.
 
 **Play:** [kottabos.onrender.com](https://kottabos.onrender.com). Open in desktop Chrome/Edge or iPhone Safari, create a party and share its invitation link. Use WASD/arrows or the joystick on the tiles. On the rope court, press Space or tap. The Free host can take about a minute to wake. The owner reported a successful computer + real-phone playtest with no problems; broader acceptance is tracked in [the playtest sheet](docs/playtest.md).
 
@@ -37,7 +37,7 @@ Always use the same origin, `http://127.0.0.1:2567`, for recovery. `localhost`, 
 1. Open http://127.0.0.1:2567 in **Chrome**. Enter a nickname and click **Create a party**.
 2. Copy the invitation link using the arrow next to the six-letter code. Open it in **Edge**, enter another nickname, and click **Join party**. Alternatively, open the main URL in Edge and enter the same code.
 3. Each browser is a distinct player. Both names and colors appear in the party list and arena. A second tab in the same browser profile is blocked while its first tab is open. Separate browser profiles also work.
-4. Walk around the safe lobby and lock in an avatar. Once two players are connected, the host clicks **Begin session**. Everyone has five seconds to vote for 3, 5 or 10 rounds. Most votes wins, tied choices are drawn at random, and an empty ballot defaults to three rounds. The host selects any nonempty set of the seven minigames. Sessions cycle through the selected games in the displayed order.
+4. Walk around the safe lobby and lock in an avatar. Once two players are connected, the host clicks **Begin session**. Everyone has five seconds to vote for 3, 5 or 10 rounds. Most votes wins, tied choices are drawn at random, and an empty ballot defaults to three rounds. The host selects any nonempty set of the four minigames. Sessions cycle through the selected games in the displayed order.
 5. In Stay on the Platform, move with **W A S D** or **arrow keys**. Click the arena first if the nickname field still has focus. Diagonal movement has the same speed. Switching away from the page clears held keys.
 6. Every tile a living player stands on starts flashing amber for **1.8 seconds**, then disappears. The shrinking bar shows time remaining. Leaving or revisiting never resets its timer, and untouched tiles remain safe. A character falls when its center reaches a missing tile. The arena boundary is solid. Eliminated and late-arriving players spectate.
 7. A lone survivor gets **3 points**. Players who fall together in the final simulation step tie for **1 point each**; earlier eliminated players and spectators get none. There is no round deadline: keep moving until only one player remains or the last players fall together.
@@ -58,19 +58,16 @@ Your avatar jogs automatically. Press **Space**, tap the court, or press **Jump*
 
 The last jumper earns **3 points**. If the final jumpers get their third ding on the same pass, each earns **1 point**. Refresh restores your dings and your role. A mid-round arrival watches until the next countdown.
 
-## Five more minigames
+## Wind-up Rally and Dash & Duck
 
 Choose these in **Session minigames** before starting. All support 2–12 players, keyboard and phone controls, late arrivals on the next round, and same-browser recovery.
 
 | Game | Play | After elimination / scoring |
 | --- | --- | --- |
-| **Wind-up Rally** | Repeatedly press **Space**, **Wind!**, or tap the track for 10 seconds. Toys then race for 8 seconds; each accepted wind adds 10 cm. Holding a key does not repeat. | Farthest toy earns **+1**; tied leaders each earn +1. Taps are limited to one every 80 ms. |
-| **Neon Trails** | Steer with WASD/arrows or the joystick. You keep moving, speed up over time, and cannot reverse. Trails, other heads and edges eliminate you. | Move an eraser with the same controls; **Space / Erase** clears nearby trails every 350 ms. Last survivor +3; ties +1. A 75-second limit settles remaining survivors. |
-| **Maze Munch** | Collect dots (+1), power stars (+5), and powered ghost catches (+10). Move with WASD/arrows or the joystick. Stars protect you for 4 seconds; three ghost hits eliminate you. | Most munch points after 60 seconds, an empty maze or no living players earns +3; ties +1. Eliminated players retain their collected points. |
-| **Dash & Duck** | Auto-run. **Space / Jump** clears orange hurdles; **S / Down / Duck** clears purple bars. Three dings eliminate you. | Move your targeting reticle with WASD/arrows or the joystick. **Space / Stun** affects one nearby runner for 350 ms, with a 1.8-second shot cooldown and 2-second target protection. Existing jumps/ducks finish. Last survivor +3; ties +1 at the 75-second limit. |
-| **Bomb Garden** | Move with WASD/arrows or the joystick. **Space / Bomb** drops a bomb with a 1.8-second fuse. Crates can reveal extra range (+) or bomb capacity. Walls block blasts, crates stop a blast, and bombs chain. Your own blasts can knock you out. | **Space / Random bomb** places a bomb on a server-chosen open cell, once per second, with a visible 2.2-second fuse. Last survivor +3; ties +1 at the 75-second limit. |
+| **Wind-up Rally** | Repeatedly press **Space**, **Wind!**, or tap the track for 10 seconds. Toys then race over rolling hills for 8 seconds; each accepted wind adds 10 cm. Holding a key does not repeat. | Farthest toy earns **+1**; tied leaders each earn +1. Rapid distinct presses count, including short network bursts. Sustained input is bounded to 30 winds/second with an 8-tap burst allowance. |
+| **Dash & Duck** | Auto-run. **Up / W / Jump** clears orange hurdles; **Down / S / Duck** clears purple overhead bars. Act when an obstacle enters the bright timing zone before the white contact line at your feet. **Space does nothing.** Three dings eliminate you. | Move your targeting reticle with WASD/arrows or the joystick. **Enter / Stun** affects one nearby runner for 350 ms, with a 1.8-second shot cooldown and 2-second target protection. Existing jumps/ducks finish. Last survivor +3; ties +1 at the 75-second limit. |
 
-Disconnecting never pauses the contest or protects a living character. Refresh restores your wind charge, pickups, hits, elimination and post-elimination role. The server chooses hits, movement, random bomb locations, results and scores. Cooldowns keep every participant's actions bounded.
+Disconnecting never pauses the contest or protects a living character. Refresh restores your wind charge, hits, elimination and post-elimination role. The server chooses hits, movement, results and scores. Cooldowns keep every participant's actions bounded.
 
 ## Character artwork
 
@@ -80,7 +77,7 @@ The footer links the generator’s full contributor/asset credits and license in
 
 Circle, square and triangle skins use the same movement, hit position, seat color and number. Choose an avatar in the lobby and click **Lock in**. It stays fixed through the session and recovery.
 
-**Music** opens per-browser mute and volume controls. DK-Water loops in the lobby and session results. DK-Racing loops through play and map votes. After a refresh, tap the page if the browser pauses autoplay. Preferences persist on this browser.
+**Audio** opens a lobby song selector, music volume/mute, and a separate effects mute. Choose DK-Water or DK-Racing; that song loops only in the lobby. The song choice is remembered in a one-year browser cookie. Music stops as soon as the host begins a session and stays off through votes, countdowns, games, waiting and results; returning to the lobby resumes the selected song. After a refresh, tap the page if the browser pauses autoplay. Volume/mute preferences persist on this browser. Short synthesized wind, jump, duck, movement, pull and stun cues follow only your local controls; dings and elimination sounds follow your authoritative character state. Other players do not trigger your effects, and recovery does not replay old hits.
 
 ## Build and serve production
 

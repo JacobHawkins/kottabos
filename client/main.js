@@ -1,14 +1,16 @@
 import { PartySession, claimBrowserTab } from './session.js';
 import { Controls } from './controls.js';
 import { MINIGAMES, MAP_CHOICES, SESSION_CHOICES } from '../shared/party.js';
-import { inArcade, GAME_HELP } from '../shared/arcade.js';
+import { inArcade, GAME_HELP, runnerCue } from '../shared/arcade.js';
 import { setupMusic } from './music.js';
+import { SoundEffects } from './sounds.js';
 import { inRopeArena, STRIKES_OUT } from '../shared/rope.js';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../shared/constants.js';
 import characterCreditsUrl from './assets/character-credits.csv?url';
 
 const $ = (id) => document.getElementById(id);
-const music = setupMusic($('party-audio'), $('music-mute'), $('music-volume'), $('music-status'));
+const music = setupMusic($('party-audio'), $('music-mute'), $('music-volume'), $('music-status'), $('music-song'));
+const sounds = new SoundEffects($('effects-mute'));
 const mapLabels = { small: 'Small · 25 tiles', large: 'Large · 98 tiles', shaped: 'Random shape' };
 $('character-credits').href = characterCreditsUrl;
 $('player-count').textContent = `0 / ${MAX_PLAYERS}`;
@@ -36,7 +38,7 @@ function renderStatus(connection, message) {
   $('join-party').disabled = busy;
   $('cancel-recovery').hidden = !busy || Boolean(session?.state);
   $('cancel-recovery').textContent = connection === 'joining' ? 'Cancel connecting' : 'Cancel rejoining';
-  if (connection !== 'connected') controls?.clear();
+  if (connection !== 'connected') { controls?.clear(); sounds.observe(null, null, false); }
   if (session?.state) render(session.state);
 }
 
@@ -77,8 +79,8 @@ function renderRoster(state) {
   const players = Object.values(state.players);
   $('party').dataset.phase = state.phase;
   // Do not replace buttons or roster nodes for every movement patch.
-  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings, hits, collected }) =>
-    [id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings, hits, collected])) + state.gameId + state.hostId + state.phase + session.playerId;
+  const key = JSON.stringify(players.map(({ id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings, hits }) =>
+    [id, name, color, connected, score, alive, participating, roundPoints, sessionPoints, ropeDings, hits])) + state.gameId + state.hostId + state.phase + session.playerId;
   if (key === lastRoster) return;
   lastRoster = key;
   const rows = players.map((player) => {
@@ -104,9 +106,8 @@ function renderRoster(state) {
       status.textContent = player.alive ? `JUMPING · ${player.ropeDings}/${STRIKES_OUT} DINGS` : 'AT THE ROPE HANDLE';
     }
     if (inArcade(state) && player.connected && player.participating) {
-      status.textContent = player.alive ? state.gameId === 'maze' ? `${player.collected} MUNCH PTS · ${player.hits}/3 HITS`
-        : state.gameId === 'runner' ? `RUNNING · ${player.hits}/3 DINGS` : 'IN THE GAME'
-        : ({ trails: 'ERASING TRAILS', runner: 'AIMING A RETICLE', bombs: 'DROPPING RANDOM BOMBS' }[state.gameId] || 'ELIMINATED · SPECTATING');
+      status.textContent = player.alive ? state.gameId === 'runner' ? `RUNNING · ${player.hits}/3 DINGS` : 'IN THE GAME'
+        : (state.gameId === 'runner' ? 'AIMING A RETICLE' : 'ELIMINATED · SPECTATING');
     }
     if (player.id === state.hostId) status.textContent += ' · HOST';
     if (state.sessionRound && state.phase !== 'lobby') status.textContent += ` · ${player.sessionPoints} SESSION PTS`;
@@ -237,26 +238,20 @@ function renderArcade(state, me, online) {
   $('arcade-guide-text').textContent = GAME_HELP[id];
   $('game-container').setAttribute('aria-label', `${MINIGAMES[id]}. ${GAME_HELP[id]}`);
   const active = ['playing', 'countdown'].includes(state.phase);
-  const hasAction = id !== 'maze' && (id !== 'trails' || me?.participating && !me.alive);
-  $('rope-controls').hidden = !active || !hasAction;
+  $('rope-controls').hidden = !active;
   $('duck-action').hidden = id !== 'runner' || !me?.alive;
   $('duck-action').disabled = !online || !me?.participating || state.phase !== 'playing';
-  const labels = { windup: state.gameStage === 'winding' ? 'Wind!' : 'Racing…', trails: 'Erase',
-    runner: me?.alive ? 'Jump' : 'Stun', bombs: me?.alive ? 'Bomb' : 'Random bomb' };
+  const labels = { windup: state.gameStage === 'winding' ? 'Wind!' : 'Racing…', runner: me?.alive ? 'Jump' : 'Stun' };
   const button = $('rope-action');
   button.textContent = labels[id] || '';
   button.dataset.action = id;
   button.disabled = !online || !me?.participating || state.phase !== 'playing' || id === 'windup' && state.gameStage !== 'winding';
   $('rope-hint').textContent = !me?.participating ? 'You join on the next round.'
-    : ({ windup: 'Tap repeatedly. Space works too.', trails: 'Move your eraser. Tap to clear trails.',
-      runner: me.alive ? 'Orange: jump. Purple: duck.' : 'Aim with the joystick or arrows. Tap Stun.',
-      bombs: me.alive ? 'Drop a bomb, then move away!' : 'Tap for a random bomb. 1s cooldown.' })[id];
+    : id === 'windup' ? 'Tap repeatedly. Space works too.'
+      : me.alive ? '↑ / W jumps · ↓ / S ducks · Space does nothing' : 'Aim with joystick or arrows. Enter / Stun fires.';
   $('rope-hud').hidden = false;
   $('rope-hud').textContent = !me?.participating ? 'Spectating' : id === 'windup' ? `${me.charge} winds · ${me.distance} cm`
-    : id === 'maze' ? `${me.collected} munch points · ${me.hits}/3 hits`
-      : id === 'runner' ? me.alive ? `${me.hits}/3 dings` : 'Aim at a runner · Stun every 1.8s'
-        : id === 'bombs' ? me.alive ? `Range ${me.power} · ${me.capacity} bomb capacity` : 'Random bomb · 1 second cooldown'
-          : me.alive ? 'Steer · Avoid trails and edges' : 'Move your eraser · Erase every 0.35s';
+    : me.alive ? `${me.hits}/3 dings · Watch the bright timing zone` : 'Aim at a runner · Stun every 1.8s';
 }
 
 function render(state) {
@@ -315,10 +310,16 @@ function renderClock() {
   $('timer-label').textContent = timed ? state.gameStage === 'winding' ? 'WINDING' : 'SECONDS LEFT' : state.phase === 'playing' ? 'STILL STANDING' : state.phase === 'countdown' ? 'STARTING IN'
     : state.phaseEndsAt ? 'VOTE CLOSES IN' : state.phase === 'lobby' ? 'WAITING FOR HOST' : '';
   const me = state.players[session.playerId];
+  const cue = $('runner-cue');
+  cue.hidden = state.gameId !== 'runner' || state.phase !== 'playing' || !me?.alive || !me?.participating;
+  if (!cue.hidden) {
+    cue.textContent = runnerCue(state, controls.arcadeTime());
+    cue.dataset.ready = String(cue.textContent.includes('NOW!'));
+  }
   const banner = $('stage-banner');
   banner.classList.toggle('countdown', state.phase === 'countdown' && session.connection === 'connected');
   banner.hidden = session.connection === 'connected' && (['lobby', 'lengthVote', 'mapVote', 'results'].includes(state.phase) ||
-    state.phase === 'playing' && (me?.alive || (inRopeArena(state) || inArcade(state) && ['trails', 'runner', 'bombs'].includes(state.gameId)) && me?.participating));
+    state.phase === 'playing' && (me?.alive || (inRopeArena(state) || inArcade(state) && state.gameId === 'runner') && me?.participating));
   banner.firstElementChild.textContent = session.connection !== 'connected' ? 'Reconnecting… your spot is reserved'
     : state.phase === 'waiting' ? 'Waiting for two connected players'
       : state.phase === 'countdown' ? Math.max(1, seconds)
@@ -342,6 +343,7 @@ if (tabClaim === 'claimed') {
   session = new PartySession({
     onState: (state) => {
       clockOffset = state.serverTime - Date.now();
+      sounds.observe(state, state.players[session.playerId], session.connection === 'connected');
       controls.reconcile();
       game?.capture(state);
       render(state);
@@ -351,7 +353,7 @@ if (tabClaim === 'claimed') {
     onReset: reset,
   });
   controls = new Controls(session, { joystick: $('joystick'), toggle: $('touch-toggle'), panel: $('touch-controls'), hint: $('touch-hint'),
-    arena: $('game-container'), actionButton: $('rope-action'), secondaryButton: $('duck-action') });
+    arena: $('game-container'), actionButton: $('rope-action'), secondaryButton: $('duck-action'), sounds });
   $('skin-choice').onchange = () => render(session.state);
   $('lock-skin').onclick = () => session.send('skin', $('skin-choice').value);
   for (const [id, title] of Object.entries(MINIGAMES)) {
@@ -402,7 +404,7 @@ if (tabClaim === 'claimed') {
       renderedPositions: game?.renderedPositions || {}, fps: game?.fps || 0, latency: session.latency,
       renderedCharacters: game?.renderedCharacters || {},
       serverStepMs: session.state?.stepMs || 0, gameId: session.state?.gameId,
-      cells: session.state?.cells || [], entities: session.state?.entities || [], gameStage: session.state?.gameStage,
+      entities: session.state?.entities || [], gameStage: session.state?.gameStage,
     }) });
   }
   if (session.saved) await session.recover();
